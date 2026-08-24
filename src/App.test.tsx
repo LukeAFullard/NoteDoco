@@ -3,8 +3,9 @@ import { describe, it, expect } from 'vitest';
 import App from './App';
 
 describe('App', () => {
-  it('renders without crashing', () => {
+  it('renders the sidebar and defaults to the Up Next dashboard', async () => {
     render(<App />);
-    expect(screen.getByText('Test Button')).toBeInTheDocument();
+    expect(await screen.findByText('Up Next')).toBeInTheDocument();
+    expect(screen.getByText('New project')).toBeInTheDocument();
   });
 });
