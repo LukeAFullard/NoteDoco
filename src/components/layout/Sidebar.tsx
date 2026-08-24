@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Plus, Inbox, Archive, ListChecks } from 'lucide-react';
+import { Plus, Inbox, Archive, ListChecks, CalendarRange } from 'lucide-react';
 import { useProjects } from '../../context/ProjectsContext';
 import { ProjectTreeItem } from './ProjectTreeItem';
 import { ProjectFormModal } from './ProjectFormModal';
@@ -32,11 +32,19 @@ export function Sidebar() {
         </Link>
         <Link
           to="/unfiled"
-          className={`flex items-center gap-2 px-2 py-1.5 rounded-panel text-sm mb-2 ${
+          className={`flex items-center gap-2 px-2 py-1.5 rounded-panel text-sm mb-1 ${
             location.pathname === '/unfiled' ? 'bg-signal/10 text-signal-dim dark:text-signal font-medium' : 'text-graphite dark:text-stone hover:bg-gray-100 dark:hover:bg-gray-800'
           }`}
         >
           <Inbox size={14} /> Unfiled
+        </Link>
+        <Link
+          to="/timeline"
+          className={`flex items-center gap-2 px-2 py-1.5 rounded-panel text-sm mb-2 ${
+            location.pathname === '/timeline' ? 'bg-signal/10 text-signal-dim dark:text-signal font-medium' : 'text-graphite dark:text-stone hover:bg-gray-100 dark:hover:bg-gray-800'
+          }`}
+        >
+          <CalendarRange size={14} /> Timeline
         </Link>
 
         {rootProjects.map((project) => (
