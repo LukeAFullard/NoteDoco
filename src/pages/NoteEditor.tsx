@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Trash2, Maximize2, Minimize2 } from 'lucide-react';
-import { getNote, putNote, deleteNote as dbDeleteNote } from '../db';
-import type { Note } from '../types';
+import { ArrowLeft, Trash2, Maximize2, Minimize2, History as HistoryIcon } from 'lucide-react';
+import { getNote, putNote, deleteNote as dbDeleteNote, getNoteVersions, putNoteVersion } from '../db';
+import type { Note, NoteVersion } from '../types';
 import { toggleChecklistLine } from '../utils/markdownChecklist';
+import { shouldCreateSnapshot } from '../utils/noteHistory';
 import { useDebouncedCallback } from '../hooks/useDebouncedCallback';
 import { NotePreview } from '../components/notes/NotePreview';
+import { NoteHistoryModal } from '../components/notes/NoteHistoryModal';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 
@@ -21,24 +23,44 @@ export function NoteEditor() {
   const [mobileTab, setMobileTab] = useState<'edit' | 'preview'>('edit');
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [focusMode, setFocusMode] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const loadedRef = useRef(false);
+  const lastSnapshotAtRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!noteId) return;
     loadedRef.current = false;
-    getNote(noteId).then((found) => {
+    getNote(noteId).then(async (found) => {
       if (!found) return;
       setNote(found);
       setTitle(found.title);
       setContent(found.contentMarkdown);
       setGoalDate(found.goalDate ?? '');
+
+      const versions = await getNoteVersions(found.id);
+      if (versions.length === 0) {
+        const baseline: NoteVersion = {
+          id: crypto.randomUUID(),
+          noteId: found.id,
+          title: found.title,
+          contentMarkdown: found.contentMarkdown,
+          goalDate: found.goalDate,
+          savedAt: found.updatedAt,
+        };
+        await putNoteVersion(baseline);
+        lastSnapshotAtRef.current = baseline.savedAt;
+      } else {
+        const mostRecent = [...versions].sort((a, b) => (a.savedAt > b.savedAt ? -1 : 1))[0];
+        lastSnapshotAtRef.current = mostRecent.savedAt;
+      }
+
       loadedRef.current = true;
     });
   }, [noteId]);
 
-  // Focus mode is session-only: reset it whenever a different note loads.
   useEffect(() => {
     setFocusMode(false);
+    setShowHistory(false);
   }, [noteId]);
 
   useEffect(() => {
@@ -57,6 +79,18 @@ export function NoteEditor() {
     await putNote(updated);
     setNote(updated);
     setSaveState('saved');
+
+    if (shouldCreateSnapshot(lastSnapshotAtRef.current, new Date(updated.updatedAt))) {
+      await putNoteVersion({
+        id: crypto.randomUUID(),
+        noteId: updated.id,
+        title: updated.title,
+        contentMarkdown: updated.contentMarkdown,
+        goalDate: updated.goalDate,
+        savedAt: updated.updatedAt,
+      });
+      lastSnapshotAtRef.current = updated.updatedAt;
+    }
   }, 500);
 
   const handleTitleChange = (value: string) => {
@@ -78,6 +112,34 @@ export function NoteEditor() {
     const newContent = toggleChecklistLine(content, lineIndex);
     setContent(newContent);
     persist({ contentMarkdown: newContent });
+  };
+
+  const handleRestore = async (version: NoteVersion) => {
+    if (!note) return;
+    const currentSnapshotAt = new Date().toISOString();
+    await putNoteVersion({
+      id: crypto.randomUUID(),
+      noteId: note.id,
+      title,
+      contentMarkdown: content,
+      goalDate: goalDate || null,
+      savedAt: currentSnapshotAt,
+    });
+
+    const restored: Note = {
+      ...note,
+      title: version.title,
+      contentMarkdown: version.contentMarkdown,
+      goalDate: version.goalDate,
+      updatedAt: new Date().toISOString(),
+    };
+    await putNote(restored);
+    setNote(restored);
+    setTitle(restored.title);
+    setContent(restored.contentMarkdown);
+    setGoalDate(restored.goalDate ?? '');
+    lastSnapshotAtRef.current = restored.updatedAt;
+    setShowHistory(false);
   };
 
   const handleDelete = async () => {
@@ -105,6 +167,16 @@ export function NoteEditor() {
           <span className="text-xs text-gray-500 dark:text-gray-400 tabular">
             {saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved' : ''}
           </span>
+          {!focusMode && (
+            <button
+              type="button"
+              onClick={() => setShowHistory(true)}
+              aria-label="History"
+              className="text-gray-500 dark:text-gray-400 hover:text-signal"
+            >
+              <HistoryIcon size={16} />
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setFocusMode((v) => !v)}
@@ -155,6 +227,10 @@ export function NoteEditor() {
           <NotePreview content={content} onToggleLine={handleToggleLine} />
         </div>
       </div>
+
+      {showHistory && note && (
+        <NoteHistoryModal noteId={note.id} onClose={() => setShowHistory(false)} onRestore={handleRestore} />
+      )}
     </div>
   );
 }

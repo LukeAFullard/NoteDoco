@@ -18,3 +18,12 @@ export interface Note {
   createdAt: string; // ISO 8601
   updatedAt: string; // ISO 8601
 }
+
+export interface NoteVersion {
+  id: string;
+  noteId: string;
+  title: string;
+  contentMarkdown: string;
+  goalDate: string | null;
+  savedAt: string; // ISO 8601 — when this checkpoint was captured
+}
