@@ -1,54 +1,63 @@
-import React, { useState } from 'react';
+import { useState, type FormEvent } from 'react';
+import { Modal } from '../ui/Modal';
+import { Panel } from '../ui/Panel';
+import { Input } from '../ui/Input';
+import { Button } from '../ui/Button';
+import type { Project } from '../../types';
+
+const COLORS: Project['color'][] = ['signal', 'verdigris', 'rust', 'graphite'];
+
+const COLOR_SWATCH_CLASS: Record<Project['color'], string> = {
+  signal: 'bg-signal',
+  verdigris: 'bg-verdigris',
+  rust: 'bg-rust',
+  graphite: 'bg-graphite dark:bg-stone',
+};
 
 interface ProjectFormModalProps {
+  initialName?: string;
+  initialColor?: Project['color'];
   title: string;
+  onSubmit: (name: string, color: Project['color']) => void;
   onClose: () => void;
-  onSubmit: (name: string, color: 'signal' | 'verdigris' | 'rust' | 'graphite') => Promise<void>;
 }
 
-export function ProjectFormModal({ title, onClose, onSubmit }: ProjectFormModalProps) {
-  const [name, setName] = useState('');
-  const [color, setColor] = useState<'signal' | 'verdigris' | 'rust' | 'graphite'>('signal');
+export function ProjectFormModal({ initialName = '', initialColor = 'signal', title, onSubmit, onClose }: ProjectFormModalProps) {
+  const [name, setName] = useState(initialName);
+  const [color, setColor] = useState<Project['color']>(initialColor);
+  const isDirty = name !== initialName || color !== initialColor;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    if (name.trim()) {
-      onSubmit(name, color);
-    }
+    if (!name.trim()) return;
+    onSubmit(name.trim(), color);
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4">
-      <div className="bg-stone dark:bg-graphite p-4 rounded-panel max-w-sm w-full">
-        <h3 className="text-lg font-bold mb-2">{title}</h3>
+    <Modal onClose={onClose} isDirty={isDirty}>
+      <Panel className="p-6 w-full max-w-sm">
         <form onSubmit={handleSubmit}>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Project name"
-            className="w-full p-2 mb-2 border rounded"
-          />
-          <select
-            value={color}
-            onChange={(e) => setColor(e.target.value as 'signal' | 'verdigris' | 'rust' | 'graphite')}
-            className="w-full p-2 mb-2 border rounded"
-          >
-            <option value="signal">Signal</option>
-            <option value="verdigris">Verdigris</option>
-            <option value="rust">Rust</option>
-            <option value="graphite">Graphite</option>
-          </select>
+          <h2 className="text-lg font-semibold text-graphite dark:text-stone mb-4">{title}</h2>
+          <Input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Project name" className="mb-4" />
+          <div className="flex gap-2 mb-6">
+            {COLORS.map((c) => (
+              <button
+                type="button"
+                key={c}
+                aria-label={`Color ${c}`}
+                onClick={() => setColor(c)}
+                className={`w-8 h-8 rounded-full ${COLOR_SWATCH_CLASS[c]} ${
+                  color === c ? 'ring-2 ring-offset-2 ring-graphite dark:ring-stone ring-offset-white dark:ring-offset-graphite' : ''
+                }`}
+              />
+            ))}
+          </div>
           <div className="flex justify-end gap-2">
-            <button type="button" onClick={onClose} className="px-3 py-1">
-              Cancel
-            </button>
-            <button type="submit" className="px-3 py-1 bg-signal text-ink rounded">
-              Save
-            </button>
+            <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
+            <Button type="submit" variant="primary">Save</Button>
           </div>
         </form>
-      </div>
-    </div>
+      </Panel>
+    </Modal>
   );
 }
