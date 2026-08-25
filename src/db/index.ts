@@ -1,5 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
-import type { Project, Note } from '../types';
+import type { Project, Note, NoteVersion } from '../types';
 
 interface NoteDocoDB extends DBSchema {
   projects: {
@@ -12,10 +12,15 @@ interface NoteDocoDB extends DBSchema {
     value: Note;
     indexes: { 'by-project': string; 'by-goalDate': string };
   };
+  noteVersions: {
+    key: string;
+    value: NoteVersion;
+    indexes: { 'by-note': string };
+  };
 }
 
 const DB_NAME = 'note-doco-db';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let dbPromise: Promise<IDBPDatabase<NoteDocoDB>> | null = null;
 let isFallbackMode = false;
@@ -23,6 +28,7 @@ let isFallbackMode = false;
 const fallbackMemoryDB = {
   projects: new Map<string, Project>(),
   notes: new Map<string, Note>(),
+  noteVersions: new Map<string, NoteVersion>(),
 };
 
 const triggerFallbackMode = (error: unknown) => {
@@ -53,6 +59,10 @@ export const initDB = () => {
           const noteStore = db.createObjectStore('notes', { keyPath: 'id' });
           noteStore.createIndex('by-project', 'projectId');
           noteStore.createIndex('by-goalDate', 'goalDate');
+        }
+        if (!db.objectStoreNames.contains('noteVersions')) {
+          const versionStore = db.createObjectStore('noteVersions', { keyPath: 'id' });
+          versionStore.createIndex('by-note', 'noteId');
         }
       },
     });
@@ -187,5 +197,36 @@ export const deleteNote = async (id: string): Promise<void> => {
   } catch (error) {
     triggerFallbackMode(error);
     fallbackMemoryDB.notes.delete(id);
+  }
+};
+
+// --- Note Versions (Time-Travel History) ---
+
+export const getNoteVersions = async (noteId: string): Promise<NoteVersion[]> => {
+  if (isFallbackMode) {
+    return Array.from(fallbackMemoryDB.noteVersions.values()).filter((v) => v.noteId === noteId);
+  }
+  try {
+    const db = await getDB();
+    return await db.getAllFromIndex('noteVersions', 'by-note', noteId);
+  } catch (error) {
+    triggerFallbackMode(error);
+    return Array.from(fallbackMemoryDB.noteVersions.values()).filter((v) => v.noteId === noteId);
+  }
+};
+
+export const putNoteVersion = async (version: NoteVersion): Promise<string> => {
+  if (isFallbackMode) {
+    fallbackMemoryDB.noteVersions.set(version.id, version);
+    return version.id;
+  }
+  try {
+    const db = await getDB();
+    await db.put('noteVersions', version);
+    return version.id;
+  } catch (error) {
+    triggerFallbackMode(error);
+    fallbackMemoryDB.noteVersions.set(version.id, version);
+    return version.id;
   }
 };

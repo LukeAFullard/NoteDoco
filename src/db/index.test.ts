@@ -10,8 +10,10 @@ import {
   getNote,
   getNotesByProject,
   deleteNote,
+  putNoteVersion,
+  getNoteVersions,
 } from './index';
-import type { Project, Note } from '../types';
+import type { Project, Note, NoteVersion } from '../types';
 
 const now = new Date().toISOString();
 
@@ -35,6 +37,16 @@ const makeNote = (projectId: string | null, overrides: Partial<Note> = {}): Note
   archived: false,
   createdAt: now,
   updatedAt: now,
+  ...overrides,
+});
+
+const makeVersion = (noteId: string, overrides: Partial<NoteVersion> = {}): NoteVersion => ({
+  id: crypto.randomUUID(),
+  noteId,
+  title: 'Test Note',
+  contentMarkdown: 'snapshot content',
+  goalDate: null,
+  savedAt: now,
   ...overrides,
 });
 
@@ -90,5 +102,23 @@ describe('notes', () => {
     await putNote(note);
     await deleteNote(note.id);
     expect(await getNote(note.id)).toBeUndefined();
+  });
+});
+
+describe('note versions', () => {
+  it('puts a version and queries it by noteId', async () => {
+    const note = makeNote(null);
+    await putNote(note);
+    await putNoteVersion(makeVersion(note.id, { title: 'v1' }));
+    await putNoteVersion(makeVersion(note.id, { title: 'v2' }));
+    await putNoteVersion(makeVersion('some-other-note-id', { title: 'unrelated' }));
+
+    const versions = await getNoteVersions(note.id);
+    expect(versions).toHaveLength(2);
+    expect(versions.map((v) => v.title).sort()).toEqual(['v1', 'v2']);
+  });
+
+  it('returns an empty array for a note with no history', async () => {
+    expect(await getNoteVersions('nonexistent')).toEqual([]);
   });
 });
