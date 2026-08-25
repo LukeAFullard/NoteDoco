@@ -1,72 +1,77 @@
-import type { ReactNode } from 'react';
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { Project } from '../types';
-import { getProjects, putProject, deleteProject } from '../db';
+import { getProjects, putProject, deleteProject as dbDeleteProject, getNotesByProject, putNote } from '../db';
 
-interface ProjectsContextType {
+type DeleteResult = { ok: true } | { ok: false; reason: 'has-children' };
+
+interface ProjectsContextValue {
   projects: Project[];
   loading: boolean;
-  createProject: (name: string, color: Project['color'], parentId: string | null) => Promise<string>;
-  updateProject: (project: Project) => Promise<void>;
-  removeProject: (id: string) => Promise<void>;
-  refreshProjects: () => Promise<void>;
+  createProject: (name: string, color: Project['color'], parentId: string | null) => Promise<Project>;
+  updateProject: (id: string, updates: { name: string; color: Project['color'] }) => Promise<void>;
+  toggleArchiveProject: (id: string) => Promise<void>;
+  deleteProject: (id: string) => Promise<DeleteResult>;
 }
 
-const ProjectsContext = createContext<ProjectsContextType | undefined>(undefined);
+const ProjectsContext = createContext<ProjectsContextValue | null>(null);
 
 export function ProjectsProvider({ children }: { children: ReactNode }) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const refreshProjects = async () => {
-    const list = await getProjects();
-    setProjects(list);
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    refreshProjects();
+  const reload = useCallback(async () => {
+    setProjects(await getProjects());
   }, []);
 
-  const createProject = async (name: string, color: Project['color'], parentId: string | null = null) => {
+  useEffect(() => {
+    reload().finally(() => setLoading(false));
+  }, [reload]);
+
+  const createProject = async (name: string, color: Project['color'], parentId: string | null) => {
     const now = new Date().toISOString();
-    const newProj: Project = {
-      id: crypto.randomUUID(),
-      name,
-      color,
-      parentId,
-      archived: false,
-      createdAt: now,
-      updatedAt: now,
-    };
-    await putProject(newProj);
-    await refreshProjects();
-    return newProj.id;
+    const project: Project = { id: crypto.randomUUID(), name, color, parentId, archived: false, createdAt: now, updatedAt: now };
+    await putProject(project);
+    await reload();
+    return project;
   };
 
-  const updateProject = async (project: Project) => {
-    await putProject({ ...project, updatedAt: new Date().toISOString() });
-    await refreshProjects();
+  const updateProject = async (id: string, updates: { name: string; color: Project['color'] }) => {
+    const existing = projects.find((p) => p.id === id);
+    if (!existing) return;
+    await putProject({ ...existing, ...updates, updatedAt: new Date().toISOString() });
+    await reload();
   };
 
-  const removeProject = async (id: string) => {
-    await deleteProject(id);
-    await refreshProjects();
+  const toggleArchiveProject = async (id: string) => {
+    const existing = projects.find((p) => p.id === id);
+    if (!existing) return;
+    await putProject({ ...existing, archived: !existing.archived, updatedAt: new Date().toISOString() });
+    await reload();
+  };
+
+  const deleteProject = async (id: string): Promise<DeleteResult> => {
+    const hasChildren = projects.some((p) => p.parentId === id);
+    if (hasChildren) return { ok: false, reason: 'has-children' };
+
+    const notes = await getNotesByProject(id);
+    for (const note of notes) {
+      await putNote({ ...note, projectId: null, updatedAt: new Date().toISOString() });
+    }
+
+    await dbDeleteProject(id);
+    await reload();
+    return { ok: true };
   };
 
   return (
-    <ProjectsContext.Provider
-      value={{ projects, loading, createProject, updateProject, removeProject, refreshProjects }}
-    >
+    <ProjectsContext.Provider value={{ projects, loading, createProject, updateProject, toggleArchiveProject, deleteProject }}>
       {children}
     </ProjectsContext.Provider>
   );
 }
 
 export function useProjects() {
-  const context = useContext(ProjectsContext);
-  if (!context) {
-    throw new Error('useProjects must be used within a ProjectsProvider');
-  }
-  return context;
+  const ctx = useContext(ProjectsContext);
+  if (!ctx) throw new Error('useProjects must be used within a ProjectsProvider');
+  return ctx;
 }
