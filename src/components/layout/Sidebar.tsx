@@ -4,6 +4,7 @@ import { Plus, Inbox, Archive, ListChecks, CalendarRange } from 'lucide-react';
 import { useProjects } from '../../context/ProjectsContext';
 import { ProjectTreeItem } from './ProjectTreeItem';
 import { ProjectFormModal } from './ProjectFormModal';
+import { TimeDocoLink } from './TimeDocoLink';
 import { Button } from '../ui/Button';
 
 export function Sidebar() {
@@ -59,6 +60,10 @@ export function Sidebar() {
         <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setShowArchived((v) => !v)}>
           <Archive size={14} /> {showArchived ? 'Hide archived' : 'Show archived'}
         </Button>
+      </div>
+
+      <div className="p-2 border-t border-graphite/10 dark:border-white/10">
+        <TimeDocoLink />
       </div>
 
       {creating && (
