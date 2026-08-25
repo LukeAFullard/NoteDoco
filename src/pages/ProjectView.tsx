@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Plus, FileText } from 'lucide-react';
+import { Plus, FileText, FileDown } from 'lucide-react';
 import { useProjects } from '../context/ProjectsContext';
 import { getNotes, getNotesByProject, putNote } from '../db';
 import type { Note } from '../types';
+import { downloadCloseOutReport } from '../utils/closeOutReport';
 import { Panel } from '../components/ui/Panel';
 import { Button } from '../components/ui/Button';
 
@@ -45,13 +46,25 @@ export function ProjectView() {
     navigate(`/notes/${note.id}`);
   };
 
+  const handleGenerateReport = () => {
+    if (!project) return;
+    downloadCloseOutReport(project.name, notes);
+  };
+
   return (
     <div className="p-6 max-w-3xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-graphite dark:text-stone">{heading}</h1>
-        <Button variant="primary" size="sm" onClick={handleCreateNote} className="gap-2">
-          <Plus size={16} /> New note
-        </Button>
+        <div className="flex items-center gap-2">
+          {project && (
+            <Button variant="ghost" size="sm" onClick={handleGenerateReport} className="gap-2">
+              <FileDown size={16} /> Close-Out Report
+            </Button>
+          )}
+          <Button variant="primary" size="sm" onClick={handleCreateNote} className="gap-2">
+            <Plus size={16} /> New note
+          </Button>
+        </div>
       </div>
 
       {notes.length === 0 ? (
