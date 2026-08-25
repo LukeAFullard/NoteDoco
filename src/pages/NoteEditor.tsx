@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Trash2 } from 'lucide-react';
+import { ArrowLeft, Trash2, Maximize2, Minimize2 } from 'lucide-react';
 import { getNote, putNote, deleteNote as dbDeleteNote } from '../db';
 import type { Note } from '../types';
 import { toggleChecklistLine } from '../utils/markdownChecklist';
@@ -20,6 +20,7 @@ export function NoteEditor() {
   const [goalDate, setGoalDate] = useState('');
   const [mobileTab, setMobileTab] = useState<'edit' | 'preview'>('edit');
   const [saveState, setSaveState] = useState<SaveState>('idle');
+  const [focusMode, setFocusMode] = useState(false);
   const loadedRef = useRef(false);
 
   useEffect(() => {
@@ -34,6 +35,20 @@ export function NoteEditor() {
       loadedRef.current = true;
     });
   }, [noteId]);
+
+  // Focus mode is session-only: reset it whenever a different note loads.
+  useEffect(() => {
+    setFocusMode(false);
+  }, [noteId]);
+
+  useEffect(() => {
+    if (!focusMode) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setFocusMode(false);
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [focusMode]);
 
   const persist = useDebouncedCallback(async (updates: Partial<Note>) => {
     if (!note) return;
@@ -77,29 +92,45 @@ export function NoteEditor() {
   const backHref = note.projectId ? `/projects/${note.projectId}` : '/unfiled';
 
   return (
-    <div className="flex flex-col h-full">
+    <div className={focusMode ? 'fixed inset-0 z-50 bg-white dark:bg-graphite flex flex-col' : 'flex flex-col h-full'}>
       <div className="flex items-center justify-between p-4 border-b border-graphite/10 dark:border-white/10">
-        <Link to={backHref} className="flex items-center gap-1 text-sm text-gray-600 dark:text-gray-300 hover:text-signal">
-          <ArrowLeft size={16} /> Back
-        </Link>
+        {focusMode ? (
+          <span className="text-sm text-gray-500 dark:text-gray-400">Focus mode</span>
+        ) : (
+          <Link to={backHref} className="flex items-center gap-1 text-sm text-gray-600 dark:text-gray-300 hover:text-signal">
+            <ArrowLeft size={16} /> Back
+          </Link>
+        )}
         <div className="flex items-center gap-4">
           <span className="text-xs text-gray-500 dark:text-gray-400 tabular">
             {saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved' : ''}
           </span>
-          <Button variant="ghost" size="sm" onClick={handleDelete} className="gap-1 text-rust">
-            <Trash2 size={14} /> Delete
-          </Button>
+          <button
+            type="button"
+            onClick={() => setFocusMode((v) => !v)}
+            aria-label={focusMode ? 'Exit focus mode' : 'Enter focus mode'}
+            className="text-gray-500 dark:text-gray-400 hover:text-signal"
+          >
+            {focusMode ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+          </button>
+          {!focusMode && (
+            <Button variant="ghost" size="sm" onClick={handleDelete} className="gap-1 text-rust">
+              <Trash2 size={14} /> Delete
+            </Button>
+          )}
         </div>
       </div>
 
       <div className="p-4 border-b border-graphite/10 dark:border-white/10 flex flex-col sm:flex-row gap-3">
         <Input value={title} onChange={(e) => handleTitleChange(e.target.value)} placeholder="Untitled note" className="text-lg font-semibold flex-1" />
-        <input
-          type="date"
-          value={goalDate}
-          onChange={(e) => handleGoalDateChange(e.target.value)}
-          className="px-3 py-2 border border-graphite/20 dark:border-white/20 rounded-panel bg-white dark:bg-graphite text-graphite dark:text-stone text-sm"
-        />
+        {!focusMode && (
+          <input
+            type="date"
+            value={goalDate}
+            onChange={(e) => handleGoalDateChange(e.target.value)}
+            className="px-3 py-2 border border-graphite/20 dark:border-white/20 rounded-panel bg-white dark:bg-graphite text-graphite dark:text-stone text-sm"
+          />
+        )}
       </div>
 
       <div className="md:hidden flex border-b border-graphite/10 dark:border-white/10">
