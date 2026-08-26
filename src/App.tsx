@@ -6,6 +6,7 @@ import { ProjectView } from './pages/ProjectView';
 import { NoteEditor } from './pages/NoteEditor';
 import { Timeline } from './pages/Timeline';
 import { Settings } from './pages/Settings';
+import { Browse } from './pages/Browse';
 
 function App() {
   return (
@@ -19,6 +20,7 @@ function App() {
             <Route path="/notes/:noteId" element={<NoteEditor />} />
             <Route path="/timeline" element={<Timeline />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/search" element={<Browse />} />
           </Route>
         </Routes>
       </HashRouter>
