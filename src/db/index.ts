@@ -1,5 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
-import type { Project, Note, NoteVersion } from '../types';
+import type { Project, Note, NoteVersion, AppSettings } from '../types';
 
 interface NoteDocoDB extends DBSchema {
   projects: {
@@ -17,10 +17,20 @@ interface NoteDocoDB extends DBSchema {
     value: NoteVersion;
     indexes: { 'by-note': string };
   };
+  settings: {
+    key: string;
+    value: AppSettings;
+  };
 }
 
 const DB_NAME = 'note-doco-db';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
+
+const DEFAULT_SETTINGS: AppSettings = {
+  id: 'app-settings',
+  lastBackupDate: null,
+  reminderIntervalDays: 14,
+};
 
 let dbPromise: Promise<IDBPDatabase<NoteDocoDB>> | null = null;
 let isFallbackMode = false;
@@ -29,6 +39,7 @@ const fallbackMemoryDB = {
   projects: new Map<string, Project>(),
   notes: new Map<string, Note>(),
   noteVersions: new Map<string, NoteVersion>(),
+  settings: new Map<string, AppSettings>(),
 };
 
 const triggerFallbackMode = (error: unknown) => {
@@ -45,6 +56,11 @@ export const closeDB = async () => {
     db.close();
     dbPromise = null;
   }
+  isFallbackMode = false;
+  fallbackMemoryDB.projects.clear();
+  fallbackMemoryDB.notes.clear();
+  fallbackMemoryDB.noteVersions.clear();
+  fallbackMemoryDB.settings.clear();
 };
 
 export const initDB = () => {
@@ -63,6 +79,9 @@ export const initDB = () => {
         if (!db.objectStoreNames.contains('noteVersions')) {
           const versionStore = db.createObjectStore('noteVersions', { keyPath: 'id' });
           versionStore.createIndex('by-note', 'noteId');
+        }
+        if (!db.objectStoreNames.contains('settings')) {
+          db.createObjectStore('settings', { keyPath: 'id' });
         }
       },
     });
@@ -200,7 +219,7 @@ export const deleteNote = async (id: string): Promise<void> => {
   }
 };
 
-// --- Note Versions (Time-Travel History) ---
+// --- Note Versions ---
 
 export const getNoteVersions = async (noteId: string): Promise<NoteVersion[]> => {
   if (isFallbackMode) {
@@ -228,5 +247,35 @@ export const putNoteVersion = async (version: NoteVersion): Promise<string> => {
     triggerFallbackMode(error);
     fallbackMemoryDB.noteVersions.set(version.id, version);
     return version.id;
+  }
+};
+
+// --- Settings ---
+
+export const getSettings = async (): Promise<AppSettings> => {
+  if (isFallbackMode) return fallbackMemoryDB.settings.get('app-settings') ?? DEFAULT_SETTINGS;
+  try {
+    const db = await getDB();
+    const existing = await db.get('settings', 'app-settings');
+    return existing ?? DEFAULT_SETTINGS;
+  } catch (error) {
+    triggerFallbackMode(error);
+    return fallbackMemoryDB.settings.get('app-settings') ?? DEFAULT_SETTINGS;
+  }
+};
+
+export const putSettings = async (settings: AppSettings): Promise<string> => {
+  if (isFallbackMode) {
+    fallbackMemoryDB.settings.set(settings.id, settings);
+    return settings.id;
+  }
+  try {
+    const db = await getDB();
+    await db.put('settings', settings);
+    return settings.id;
+  } catch (error) {
+    triggerFallbackMode(error);
+    fallbackMemoryDB.settings.set(settings.id, settings);
+    return settings.id;
   }
 };

@@ -12,6 +12,8 @@ import {
   deleteNote,
   putNoteVersion,
   getNoteVersions,
+  getSettings,
+  putSettings,
 } from './index';
 import type { Project, Note, NoteVersion } from '../types';
 
@@ -59,15 +61,13 @@ describe('projects', () => {
   it('puts and gets a project', async () => {
     const project = makeProject();
     await putProject(project);
-    const fetched = await getProject(project.id);
-    expect(fetched).toEqual(project);
+    expect(await getProject(project.id)).toEqual(project);
   });
 
   it('lists all projects', async () => {
     await putProject(makeProject({ name: 'A' }));
     await putProject(makeProject({ name: 'B' }));
-    const all = await getProjects();
-    expect(all).toHaveLength(2);
+    expect(await getProjects()).toHaveLength(2);
   });
 
   it('deletes a project', async () => {
@@ -82,8 +82,7 @@ describe('notes', () => {
   it('puts and gets a note', async () => {
     const note = makeNote(null);
     await putNote(note);
-    const fetched = await getNote(note.id);
-    expect(fetched).toEqual(note);
+    expect(await getNote(note.id)).toEqual(note);
   });
 
   it('queries notes by project via the by-project index', async () => {
@@ -120,5 +119,18 @@ describe('note versions', () => {
 
   it('returns an empty array for a note with no history', async () => {
     expect(await getNoteVersions('nonexistent')).toEqual([]);
+  });
+});
+
+describe('settings', () => {
+  it('returns default settings when none exist yet', async () => {
+    expect(await getSettings()).toEqual({ id: 'app-settings', lastBackupDate: null, reminderIntervalDays: 14 });
+  });
+
+  it('puts and retrieves updated settings', async () => {
+    await putSettings({ id: 'app-settings', lastBackupDate: '2026-01-01T00:00:00.000Z', reminderIntervalDays: 30 });
+    const settings = await getSettings();
+    expect(settings.lastBackupDate).toBe('2026-01-01T00:00:00.000Z');
+    expect(settings.reminderIntervalDays).toBe(30);
   });
 });
