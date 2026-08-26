@@ -181,7 +181,7 @@ export const readAndImportBackupFile = async (file: File): Promise<ImportResult>
       if (fileBytes) {
         attachmentsToImport.push({
           ...meta,
-          blob: new Blob([fileBytes.buffer as ArrayBuffer], { type: meta.mimeType }),
+          blob: new Blob([fileBytes as BlobPart], { type: meta.mimeType }),
         });
       }
     }
