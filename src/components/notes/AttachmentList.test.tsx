@@ -37,12 +37,12 @@ describe('AttachmentList', () => {
     const deleteBtn = screen.getByRole('button', { name: /delete attachment sample\.pdf/i });
     fireEvent.click(deleteBtn);
 
-    await waitFor(async () => {
-      const remaining = await getAttachmentsByNote(noteId);
-      expect(remaining).toHaveLength(0);
+    await waitFor(() => {
+      expect(screen.getByText('No attached files.')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('No attached files.')).toBeInTheDocument();
+    const remaining = await getAttachmentsByNote(noteId);
+    expect(remaining).toHaveLength(0);
   });
 
   it('allows attaching a file', async () => {
