@@ -36,6 +36,7 @@ export interface AppSettings {
   id: 'app-settings';
   lastBackupDate: string | null;
   reminderIntervalDays: number;
+  notificationsEnabled: boolean;
 }
 
 export interface Attachment {

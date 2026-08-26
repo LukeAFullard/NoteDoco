@@ -35,6 +35,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   id: 'app-settings',
   lastBackupDate: null,
   reminderIntervalDays: 14,
+  notificationsEnabled: false,
 };
 
 let dbPromise: Promise<IDBPDatabase<NoteDocoDB>> | null = null;

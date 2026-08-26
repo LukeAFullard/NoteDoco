@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { BackupReminderBanner } from '../BackupReminderBanner';
+import { DueDateNotifier } from '../DueDateNotifier';
 
 export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -10,6 +11,7 @@ export function AppShell() {
   return (
     <div className="h-screen flex flex-col bg-white dark:bg-graphite">
       <BackupReminderBanner />
+      <DueDateNotifier />
 
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
         <header className="md:hidden flex items-center justify-between p-3 border-b border-graphite/10 dark:border-white/10 bg-stone dark:bg-ink">
