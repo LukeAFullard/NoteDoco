@@ -73,6 +73,40 @@ describe('NoteEditor focus mode', () => {
   });
 });
 
+describe('NoteEditor recurring checklists', () => {
+  it('resets checklist items when interval has elapsed upon opening', async () => {
+    const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+    await seedNote('recurring-1', {
+      title: 'Daily Checklist',
+      contentMarkdown: '- [x] Task 1\n- [X] Task 2',
+      recurrence: 'daily',
+      createdAt: twoDaysAgo,
+      lastRecurredAt: twoDaysAgo,
+    });
+
+    renderEditor('recurring-1');
+
+    const checkboxes = await screen.findAllByRole('checkbox');
+    expect(checkboxes.length).toBeGreaterThan(0);
+    checkboxes.forEach((box) => {
+      expect(box).not.toBeChecked();
+    });
+  });
+});
+
+describe('NoteEditor duplicate', () => {
+  it('duplicates a note and navigates to the duplicate', async () => {
+    const note = await seedNote('duplicate-1', { title: 'Original Note' });
+
+    renderEditor(note.id);
+
+    const dupBtn = await screen.findByLabelText('Duplicate note');
+    fireEvent.click(dupBtn);
+
+    expect(await screen.findByDisplayValue('Copy of Original Note')).toBeInTheDocument();
+  });
+});
+
 describe('NoteEditor time-travel history', () => {
   it('creates a baseline checkpoint on first load if no history exists', async () => {
     const note = await seedNote('note-hist-1');
