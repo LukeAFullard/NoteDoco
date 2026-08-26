@@ -9,6 +9,7 @@ import { shouldCreateSnapshot } from '../utils/noteHistory';
 import { useDebouncedCallback } from '../hooks/useDebouncedCallback';
 import { NotePreview } from '../components/notes/NotePreview';
 import { NoteHistoryModal } from '../components/notes/NoteHistoryModal';
+import { AttachmentList } from '../components/notes/AttachmentList';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 
@@ -272,7 +273,7 @@ export function NoteEditor() {
         </button>
       </div>
 
-      <div className="flex-1 grid grid-cols-1 md:grid-cols-2 overflow-hidden">
+      <div className="flex-1 grid grid-cols-1 md:grid-cols-2 overflow-hidden min-h-0">
         <textarea
           value={content}
           onChange={(e) => handleContentChange(e.target.value)}
@@ -285,6 +286,8 @@ export function NoteEditor() {
           <NotePreview content={content} onToggleLine={handleToggleLine} />
         </div>
       </div>
+
+      {!focusMode && <AttachmentList noteId={note.id} />}
 
       {showHistory && note && (
         <NoteHistoryModal noteId={note.id} onClose={() => setShowHistory(false)} onRestore={handleRestore} />

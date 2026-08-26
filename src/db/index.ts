@@ -1,5 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
-import type { Project, Note, NoteVersion, AppSettings } from '../types';
+import type { Project, Note, NoteVersion, AppSettings, Attachment } from '../types';
 
 interface NoteDocoDB extends DBSchema {
   projects: {
@@ -21,10 +21,15 @@ interface NoteDocoDB extends DBSchema {
     key: string;
     value: AppSettings;
   };
+  attachments: {
+    key: string;
+    value: Attachment;
+    indexes: { 'by-note': string };
+  };
 }
 
 const DB_NAME = 'note-doco-db';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 const DEFAULT_SETTINGS: AppSettings = {
   id: 'app-settings',
@@ -40,6 +45,7 @@ const fallbackMemoryDB = {
   notes: new Map<string, Note>(),
   noteVersions: new Map<string, NoteVersion>(),
   settings: new Map<string, AppSettings>(),
+  attachments: new Map<string, Attachment>(),
 };
 
 const triggerFallbackMode = (error: unknown) => {
@@ -61,6 +67,7 @@ export const closeDB = async () => {
   fallbackMemoryDB.notes.clear();
   fallbackMemoryDB.noteVersions.clear();
   fallbackMemoryDB.settings.clear();
+  fallbackMemoryDB.attachments.clear();
 };
 
 export const initDB = () => {
@@ -82,6 +89,10 @@ export const initDB = () => {
         }
         if (!db.objectStoreNames.contains('settings')) {
           db.createObjectStore('settings', { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains('attachments')) {
+          const attachmentStore = db.createObjectStore('attachments', { keyPath: 'id' });
+          attachmentStore.createIndex('by-note', 'noteId');
         }
       },
     });
@@ -277,5 +288,61 @@ export const putSettings = async (settings: AppSettings): Promise<string> => {
     triggerFallbackMode(error);
     fallbackMemoryDB.settings.set(settings.id, settings);
     return settings.id;
+  }
+};
+
+// --- Attachments ---
+
+export const getAttachmentsByNote = async (noteId: string): Promise<Attachment[]> => {
+  if (isFallbackMode) {
+    return Array.from(fallbackMemoryDB.attachments.values()).filter((a) => a.noteId === noteId);
+  }
+  try {
+    const db = await getDB();
+    return await db.getAllFromIndex('attachments', 'by-note', noteId);
+  } catch (error) {
+    triggerFallbackMode(error);
+    return Array.from(fallbackMemoryDB.attachments.values()).filter((a) => a.noteId === noteId);
+  }
+};
+
+export const putAttachment = async (attachment: Attachment): Promise<string> => {
+  if (isFallbackMode) {
+    fallbackMemoryDB.attachments.set(attachment.id, attachment);
+    return attachment.id;
+  }
+  try {
+    const db = await getDB();
+    await db.put('attachments', attachment);
+    return attachment.id;
+  } catch (error) {
+    triggerFallbackMode(error);
+    fallbackMemoryDB.attachments.set(attachment.id, attachment);
+    return attachment.id;
+  }
+};
+
+export const deleteAttachment = async (id: string): Promise<void> => {
+  if (isFallbackMode) {
+    fallbackMemoryDB.attachments.delete(id);
+    return;
+  }
+  try {
+    const db = await getDB();
+    await db.delete('attachments', id);
+  } catch (error) {
+    triggerFallbackMode(error);
+    fallbackMemoryDB.attachments.delete(id);
+  }
+};
+
+export const getAllAttachments = async (): Promise<Attachment[]> => {
+  if (isFallbackMode) return Array.from(fallbackMemoryDB.attachments.values());
+  try {
+    const db = await getDB();
+    return await db.getAll('attachments');
+  } catch (error) {
+    triggerFallbackMode(error);
+    return Array.from(fallbackMemoryDB.attachments.values());
   }
 };
