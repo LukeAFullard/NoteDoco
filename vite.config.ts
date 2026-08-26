@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
-  base: '/',
+  base: './',
   plugins: [
     react(),
     VitePWA({
@@ -16,8 +16,8 @@ export default defineConfig({
         name: 'NoteDoco',
         short_name: 'NoteDoco',
         description: 'Privacy-first, 100% client-side notes, checklists, and project organisation.',
-        scope: '/',
-        start_url: '/',
+        scope: './',
+        start_url: './',
         background_color: '#10161C',
         theme_color: '#10161C',
         icons: [
