@@ -2,22 +2,22 @@ import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
+const base = process.env.VITE_BASE_PATH || '/'
+
 export default defineConfig({
-  base: './',
+  base,
   plugins: [
     react(),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg'],
       workbox: {
-        navigateFallback: '/index.html',
+        navigateFallback: `${base}index.html`,
       },
       manifest: {
         name: 'NoteDoco',
         short_name: 'NoteDoco',
         description: 'Privacy-first, 100% client-side notes, checklists, and project organisation.',
-        scope: './',
-        start_url: './',
         background_color: '#10161C',
         theme_color: '#10161C',
         icons: [
