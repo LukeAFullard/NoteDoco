@@ -8,6 +8,8 @@ export interface Project {
   updatedAt: string;
 }
 
+export type Recurrence = 'none' | 'daily' | 'weekly' | 'monthly';
+
 export interface Note {
   id: string;
   projectId: string | null;
@@ -17,6 +19,8 @@ export interface Note {
   archived: boolean;
   createdAt: string;
   updatedAt: string;
+  recurrence?: Recurrence;
+  lastRecurredAt?: string | null;
 }
 
 export interface NoteVersion {

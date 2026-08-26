@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Trash2, Maximize2, Minimize2, History as HistoryIcon } from 'lucide-react';
+import { ArrowLeft, Trash2, Maximize2, Minimize2, History as HistoryIcon, Copy } from 'lucide-react';
 import { getNote, putNote, deleteNote as dbDeleteNote, getNoteVersions, putNoteVersion } from '../db';
-import type { Note, NoteVersion } from '../types';
+import type { Note, NoteVersion, Recurrence } from '../types';
+import { shouldResetRecurringChecklist, resetChecklistItems, duplicateNote } from '../utils/recurrence';
 import { toggleChecklistLine } from '../utils/markdownChecklist';
 import { shouldCreateSnapshot } from '../utils/noteHistory';
 import { useDebouncedCallback } from '../hooks/useDebouncedCallback';
@@ -20,6 +21,7 @@ export function NoteEditor() {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [goalDate, setGoalDate] = useState('');
+  const [recurrence, setRecurrence] = useState<Recurrence>('none');
   const [mobileTab, setMobileTab] = useState<'edit' | 'preview'>('edit');
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [focusMode, setFocusMode] = useState(false);
@@ -32,20 +34,42 @@ export function NoteEditor() {
     loadedRef.current = false;
     getNote(noteId).then(async (found) => {
       if (!found) return;
-      setNote(found);
-      setTitle(found.title);
-      setContent(found.contentMarkdown);
-      setGoalDate(found.goalDate ?? '');
 
-      const versions = await getNoteVersions(found.id);
-      if (versions.length === 0) {
-        const baseline: NoteVersion = {
+      let effectiveNote = found;
+      if (shouldResetRecurringChecklist(found)) {
+        const resetAt = new Date().toISOString();
+        await putNoteVersion({
           id: crypto.randomUUID(),
           noteId: found.id,
           title: found.title,
           contentMarkdown: found.contentMarkdown,
           goalDate: found.goalDate,
-          savedAt: found.updatedAt,
+          savedAt: resetAt,
+        });
+        effectiveNote = {
+          ...found,
+          contentMarkdown: resetChecklistItems(found.contentMarkdown),
+          lastRecurredAt: resetAt,
+          updatedAt: resetAt,
+        };
+        await putNote(effectiveNote);
+      }
+
+      setNote(effectiveNote);
+      setTitle(effectiveNote.title);
+      setContent(effectiveNote.contentMarkdown);
+      setGoalDate(effectiveNote.goalDate ?? '');
+      setRecurrence(effectiveNote.recurrence ?? 'none');
+
+      const versions = await getNoteVersions(effectiveNote.id);
+      if (versions.length === 0) {
+        const baseline: NoteVersion = {
+          id: crypto.randomUUID(),
+          noteId: effectiveNote.id,
+          title: effectiveNote.title,
+          contentMarkdown: effectiveNote.contentMarkdown,
+          goalDate: effectiveNote.goalDate,
+          savedAt: effectiveNote.updatedAt,
         };
         await putNoteVersion(baseline);
         lastSnapshotAtRef.current = baseline.savedAt;
@@ -108,6 +132,18 @@ export function NoteEditor() {
     if (loadedRef.current) persist({ goalDate: value || null });
   };
 
+  const handleRecurrenceChange = (value: Recurrence) => {
+    setRecurrence(value);
+    if (loadedRef.current) persist({ recurrence: value });
+  };
+
+  const handleDuplicate = async () => {
+    if (!note) return;
+    const copy = duplicateNote(note);
+    await putNote(copy);
+    navigate(`/notes/${copy.id}`);
+  };
+
   const handleToggleLine = (lineIndex: number) => {
     const newContent = toggleChecklistLine(content, lineIndex);
     setContent(newContent);
@@ -168,14 +204,24 @@ export function NoteEditor() {
             {saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved' : ''}
           </span>
           {!focusMode && (
-            <button
-              type="button"
-              onClick={() => setShowHistory(true)}
-              aria-label="History"
-              className="text-gray-500 dark:text-gray-400 hover:text-signal"
-            >
-              <HistoryIcon size={16} />
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => setShowHistory(true)}
+                aria-label="History"
+                className="text-gray-500 dark:text-gray-400 hover:text-signal"
+              >
+                <HistoryIcon size={16} />
+              </button>
+              <button
+                type="button"
+                onClick={handleDuplicate}
+                aria-label="Duplicate note"
+                className="text-gray-500 dark:text-gray-400 hover:text-signal"
+              >
+                <Copy size={16} />
+              </button>
+            </>
           )}
           <button
             type="button"
@@ -196,12 +242,24 @@ export function NoteEditor() {
       <div className="p-4 border-b border-graphite/10 dark:border-white/10 flex flex-col sm:flex-row gap-3">
         <Input value={title} onChange={(e) => handleTitleChange(e.target.value)} placeholder="Untitled note" className="text-lg font-semibold flex-1" />
         {!focusMode && (
-          <input
-            type="date"
-            value={goalDate}
-            onChange={(e) => handleGoalDateChange(e.target.value)}
-            className="px-3 py-2 border border-graphite/20 dark:border-white/20 rounded-panel bg-white dark:bg-graphite text-graphite dark:text-stone text-sm"
-          />
+          <>
+            <input
+              type="date"
+              value={goalDate}
+              onChange={(e) => handleGoalDateChange(e.target.value)}
+              className="px-3 py-2 border border-graphite/20 dark:border-white/20 rounded-panel bg-white dark:bg-graphite text-graphite dark:text-stone text-sm"
+            />
+            <select
+              value={recurrence}
+              onChange={(e) => handleRecurrenceChange(e.target.value as Recurrence)}
+              className="px-3 py-2 border border-graphite/20 dark:border-white/20 rounded-panel bg-white dark:bg-graphite text-graphite dark:text-stone text-sm"
+            >
+              <option value="none">No repeat</option>
+              <option value="daily">Repeats daily</option>
+              <option value="weekly">Repeats weekly</option>
+              <option value="monthly">Repeats monthly</option>
+            </select>
+          </>
         )}
       </div>
 
