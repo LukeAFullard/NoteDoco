@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { HashRouter, Routes, Route } from 'react-router-dom';
 import { ProjectsProvider } from './context/ProjectsContext';
 import { AppShell } from './components/layout/AppShell';
 import { Dashboard } from './pages/Dashboard';
@@ -9,7 +9,7 @@ import { Timeline } from './pages/Timeline';
 function App() {
   return (
     <ProjectsProvider>
-      <BrowserRouter>
+      <HashRouter>
         <Routes>
           <Route element={<AppShell />}>
             <Route path="/" element={<Dashboard />} />
@@ -19,7 +19,7 @@ function App() {
             <Route path="/timeline" element={<Timeline />} />
           </Route>
         </Routes>
-      </BrowserRouter>
+      </HashRouter>
     </ProjectsProvider>
   );
 }
