@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { format } from 'date-fns';
-import { Download, Upload, HardDrive, Paperclip } from 'lucide-react';
-import { getSettings, getAllAttachments } from '../db';
+import { Download, Upload, HardDrive, Paperclip, Bell } from 'lucide-react';
+import { getSettings, putSettings, getAllAttachments } from '../db';
 import { downloadBackup, readAndImportBackupFile } from '../utils/backup';
 import { getStorageEstimate, formatBytes, type StorageEstimateResult } from '../utils/attachments';
 import { Panel } from '../components/ui/Panel';
@@ -17,6 +17,14 @@ export function Settings() {
   const [importError, setImportError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const notificationSupported = typeof window !== 'undefined' && 'Notification' in window;
+  const [permission, setPermission] = useState<NotificationPermission | 'unsupported'>(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      return Notification.permission;
+    }
+    return 'unsupported';
+  });
+
   const refreshData = async () => {
     const [stg, atts, est] = await Promise.all([
       getSettings(),
@@ -31,6 +39,36 @@ export function Settings() {
   useEffect(() => {
     refreshData();
   }, []);
+
+  const handleNotificationToggle = async (enabled: boolean) => {
+    if (!settings) return;
+
+    if (!notificationSupported) {
+      return;
+    }
+
+    if (enabled) {
+      let currentPermission = Notification.permission;
+      if (currentPermission === 'default') {
+        currentPermission = await Notification.requestPermission();
+        setPermission(currentPermission);
+      }
+
+      if (currentPermission === 'granted') {
+        const updated = { ...settings, notificationsEnabled: true };
+        await putSettings(updated);
+        setSettings(updated);
+      } else {
+        const updated = { ...settings, notificationsEnabled: false };
+        await putSettings(updated);
+        setSettings(updated);
+      }
+    } else {
+      const updated = { ...settings, notificationsEnabled: false };
+      await putSettings(updated);
+      setSettings(updated);
+    }
+  };
 
   const handleExport = async () => {
     await downloadBackup({ includeAttachments });
@@ -68,6 +106,49 @@ export function Settings() {
   return (
     <div className="p-6 max-w-2xl mx-auto space-y-6">
       <h1 className="text-2xl font-bold text-graphite dark:text-stone mb-6">Settings</h1>
+
+      <Panel className="p-6">
+        <h2 className="text-lg font-semibold text-graphite dark:text-stone mb-1 flex items-center gap-2">
+          <Bell size={20} /> Notifications
+        </h2>
+        <div className="space-y-3 mt-3">
+          {!notificationSupported ? (
+            <p className="text-sm text-gray-500 dark:text-gray-400 italic">
+              Desktop notifications are not supported in this browser environment.
+            </p>
+          ) : permission === 'denied' ? (
+            <div className="space-y-2">
+              <label className="inline-flex items-center gap-2 text-sm text-gray-400 dark:text-gray-500 cursor-not-allowed">
+                <input
+                  type="checkbox"
+                  disabled
+                  checked={false}
+                  className="rounded border-graphite/20 dark:border-white/20 text-signal focus:ring-signal cursor-not-allowed"
+                />
+                Due date notifications
+              </label>
+              <p className="text-xs text-rust">
+                Notifications are blocked in your browser settings. To enable due date reminders, allow notification permissions for this site in your browser settings.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              <label className="inline-flex items-center gap-2 text-sm text-graphite dark:text-stone cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={settings.notificationsEnabled && permission === 'granted'}
+                  onChange={(e) => handleNotificationToggle(e.target.checked)}
+                  className="rounded border-graphite/20 dark:border-white/20 text-signal focus:ring-signal"
+                />
+                Due date notifications
+              </label>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Receive browser notifications when notes become due today or overdue while NoteDoco is open.
+              </p>
+            </div>
+          )}
+        </div>
+      </Panel>
 
       <Panel className="p-6">
         <h2 className="text-lg font-semibold text-graphite dark:text-stone mb-1 flex items-center gap-2">

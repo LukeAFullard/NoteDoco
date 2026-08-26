@@ -128,14 +128,15 @@ describe('note versions', () => {
 
 describe('settings', () => {
   it('returns default settings when none exist yet', async () => {
-    expect(await getSettings()).toEqual({ id: 'app-settings', lastBackupDate: null, reminderIntervalDays: 14 });
+    expect(await getSettings()).toEqual({ id: 'app-settings', lastBackupDate: null, reminderIntervalDays: 14, notificationsEnabled: false });
   });
 
   it('puts and retrieves updated settings', async () => {
-    await putSettings({ id: 'app-settings', lastBackupDate: '2026-01-01T00:00:00.000Z', reminderIntervalDays: 30 });
+    await putSettings({ id: 'app-settings', lastBackupDate: '2026-01-01T00:00:00.000Z', reminderIntervalDays: 30, notificationsEnabled: true });
     const settings = await getSettings();
     expect(settings.lastBackupDate).toBe('2026-01-01T00:00:00.000Z');
     expect(settings.reminderIntervalDays).toBe(30);
+    expect(settings.notificationsEnabled).toBe(true);
   });
 });
 

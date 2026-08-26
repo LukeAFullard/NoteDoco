@@ -39,7 +39,7 @@ describe('BackupReminderBanner', () => {
 
   it('stays hidden when a recent backup exists', async () => {
     await putProject(makeProject());
-    await putSettings({ id: 'app-settings', lastBackupDate: new Date().toISOString(), reminderIntervalDays: 14 });
+    await putSettings({ id: 'app-settings', lastBackupDate: new Date().toISOString(), reminderIntervalDays: 14, notificationsEnabled: false });
     render(<MemoryRouter><BackupReminderBanner /></MemoryRouter>);
     await new Promise((r) => setTimeout(r, 50));
     expect(screen.queryByText(/last backup/i)).not.toBeInTheDocument();
