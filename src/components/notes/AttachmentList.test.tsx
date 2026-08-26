@@ -16,6 +16,7 @@ describe('AttachmentList', () => {
   const noteId = 'test-note-id';
 
   it('renders existing attachments and deletes one on request', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockImplementation(() => true);
     const att: Attachment = {
       id: 'att-1',
       noteId,
@@ -32,10 +33,10 @@ describe('AttachmentList', () => {
     expect(await screen.findByText('sample.pdf')).toBeInTheDocument();
     expect(screen.getByText('2 KB')).toBeInTheDocument();
 
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
-
     const deleteBtn = screen.getByRole('button', { name: /delete attachment sample\.pdf/i });
     fireEvent.click(deleteBtn);
+
+    expect(confirmSpy).toHaveBeenCalledWith('Delete attachment "sample.pdf"?');
 
     await waitFor(() => {
       expect(screen.getByText('No attached files.')).toBeInTheDocument();
