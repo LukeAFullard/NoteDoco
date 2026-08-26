@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Plus, Inbox, Archive, ListChecks, CalendarRange } from 'lucide-react';
+import { Plus, Inbox, Archive, ListChecks, CalendarRange, Settings as SettingsIcon } from 'lucide-react';
 import { useProjects } from '../../context/ProjectsContext';
 import { ProjectTreeItem } from './ProjectTreeItem';
 import { ProjectFormModal } from './ProjectFormModal';
@@ -60,6 +60,14 @@ export function Sidebar() {
         <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setShowArchived((v) => !v)}>
           <Archive size={14} /> {showArchived ? 'Hide archived' : 'Show archived'}
         </Button>
+        <Link
+          to="/settings"
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-panel text-sm ${
+            location.pathname === '/settings' ? 'bg-signal/10 text-signal-dim dark:text-signal font-medium' : 'text-graphite dark:text-stone hover:bg-gray-100 dark:hover:bg-gray-800'
+          }`}
+        >
+          <SettingsIcon size={14} /> Settings
+        </Link>
       </div>
 
       <div className="p-2 border-t border-graphite/10 dark:border-white/10">

@@ -4,19 +4,19 @@ export interface Project {
   color: 'signal' | 'verdigris' | 'rust' | 'graphite';
   parentId: string | null;
   archived: boolean;
-  createdAt: string; // ISO 8601
-  updatedAt: string; // ISO 8601
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Note {
   id: string;
-  projectId: string | null; // null = unfiled
+  projectId: string | null;
   title: string;
-  contentMarkdown: string; // plain markdown; checklist items use GFM "- [ ]" syntax
-  goalDate: string | null; // ISO 8601 date only (e.g. "2026-09-01"), no time component
+  contentMarkdown: string;
+  goalDate: string | null;
   archived: boolean;
-  createdAt: string; // ISO 8601
-  updatedAt: string; // ISO 8601
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface NoteVersion {
@@ -25,5 +25,11 @@ export interface NoteVersion {
   title: string;
   contentMarkdown: string;
   goalDate: string | null;
-  savedAt: string; // ISO 8601 — when this checkpoint was captured
+  savedAt: string;
+}
+
+export interface AppSettings {
+  id: 'app-settings';
+  lastBackupDate: string | null;
+  reminderIntervalDays: number;
 }
