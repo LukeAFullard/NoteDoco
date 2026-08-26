@@ -37,3 +37,13 @@ export interface AppSettings {
   lastBackupDate: string | null;
   reminderIntervalDays: number;
 }
+
+export interface Attachment {
+  id: string;
+  noteId: string;
+  filename: string;
+  mimeType: string;
+  size: number; // bytes
+  blob: Blob;
+  createdAt: string;
+}

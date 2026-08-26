@@ -14,8 +14,12 @@ import {
   getNoteVersions,
   getSettings,
   putSettings,
+  putAttachment,
+  getAttachmentsByNote,
+  deleteAttachment,
+  getAllAttachments,
 } from './index';
-import type { Project, Note, NoteVersion } from '../types';
+import type { Project, Note, NoteVersion, Attachment } from '../types';
 
 const now = new Date().toISOString();
 
@@ -132,5 +136,59 @@ describe('settings', () => {
     const settings = await getSettings();
     expect(settings.lastBackupDate).toBe('2026-01-01T00:00:00.000Z');
     expect(settings.reminderIntervalDays).toBe(30);
+  });
+});
+
+describe('attachments', () => {
+  const makeAttachment = (noteId: string, overrides: Partial<Attachment> = {}): Attachment => ({
+    id: crypto.randomUUID(),
+    noteId,
+    filename: 'test.png',
+    mimeType: 'image/png',
+    size: 1024,
+    blob: new Blob(['test content'], { type: 'image/png' }),
+    createdAt: now,
+    ...overrides,
+  });
+
+  it('puts and gets attachments by noteId index', async () => {
+    const noteId1 = crypto.randomUUID();
+    const noteId2 = crypto.randomUUID();
+
+    const att1 = makeAttachment(noteId1, { filename: 'file1.txt' });
+    const att2 = makeAttachment(noteId1, { filename: 'file2.txt' });
+    const att3 = makeAttachment(noteId2, { filename: 'file3.txt' });
+
+    await putAttachment(att1);
+    await putAttachment(att2);
+    await putAttachment(att3);
+
+    const note1Atts = await getAttachmentsByNote(noteId1);
+    expect(note1Atts).toHaveLength(2);
+    expect(note1Atts.map((a) => a.filename).sort()).toEqual(['file1.txt', 'file2.txt']);
+
+    const note2Atts = await getAttachmentsByNote(noteId2);
+    expect(note2Atts).toHaveLength(1);
+    expect(note2Atts[0].filename).toBe('file3.txt');
+  });
+
+  it('getAllAttachments returns all attachments across notes', async () => {
+    const noteId1 = crypto.randomUUID();
+    const noteId2 = crypto.randomUUID();
+
+    await putAttachment(makeAttachment(noteId1));
+    await putAttachment(makeAttachment(noteId2));
+
+    const all = await getAllAttachments();
+    expect(all).toHaveLength(2);
+  });
+
+  it('deletes an attachment', async () => {
+    const noteId = crypto.randomUUID();
+    const att = makeAttachment(noteId);
+    await putAttachment(att);
+
+    await deleteAttachment(att.id);
+    expect(await getAttachmentsByNote(noteId)).toHaveLength(0);
   });
 });
