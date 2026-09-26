@@ -3,7 +3,7 @@ import { Command } from 'cmdk';
 import { useNavigate } from 'react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
-  CalendarDays, ChartGantt, FilePlus, FlaskConical, FolderPlus, Hash, Inbox, Keyboard, ListTodo, Moon, NotebookPen, Palette, Redo2, Search, Settings, StickyNote, Sun, Trash2, Undo2,
+  CalendarDays, CalendarRange, ChartGantt, FilePlus, FlaskConical, FolderPlus, Hash, Inbox, Keyboard, ListTodo, Moon, NotebookPen, Palette, Redo2, Search, Settings, StickyNote, Sun, Trash2, Undo2,
 } from 'lucide-react';
 import { db } from '@/data/db';
 import { useGroups } from '@/data/hooks';
@@ -59,6 +59,7 @@ export function CommandPalette() {
     { id: 'today', label: 'Today', icon: <CalendarDays size={16} />, run: () => navigate('/today') },
     { id: 'inbox', label: 'Inbox', icon: <Inbox size={16} />, run: () => navigate('/inbox') },
     { id: 'timeline', label: 'Timeline', icon: <ChartGantt size={16} />, keywords: ['lanes', 'gantt', 'plan', 'schedule'], run: () => navigate('/timeline') },
+    { id: 'calendar', label: 'Calendar', icon: <CalendarRange size={16} />, keywords: ['month', 'week', 'agenda'], run: () => navigate('/calendar') },
     { id: 'tasks', label: 'Tasks', icon: <ListTodo size={16} />, keywords: ['todo', 'to-do', 'checklist'], run: () => navigate('/tasks') },
     {
       id: 'daily',

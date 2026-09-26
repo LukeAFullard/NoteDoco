@@ -6,6 +6,7 @@ import { NewFromShortcut } from '@/features/capture/NewFromShortcut';
 const TodayPage = lazy(() => import('@/features/today/TodayPage').then((m) => ({ default: m.TodayPage })));
 const TasksPage = lazy(() => import('@/features/tasks/TasksPage').then((m) => ({ default: m.TasksPage })));
 const TimelinePage = lazy(() => import('@/features/timeline/TimelinePage').then((m) => ({ default: m.TimelinePage })));
+const CalendarPage = lazy(() => import('@/features/calendar/CalendarPage').then((m) => ({ default: m.CalendarPage })));
 const GroupPage = lazy(() => import('@/features/groups/GroupPage').then((m) => ({ default: m.GroupPage })));
 const TrashPage = lazy(() => import('@/features/trash/TrashPage').then((m) => ({ default: m.TrashPage })));
 const SettingsPage = lazy(() => import('@/features/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })));
@@ -29,6 +30,7 @@ const routes = [
       { path: 'inbox', element: <InboxPage /> },
       { path: 'tasks', element: <TasksPage /> },
       { path: 'timeline', element: <TimelinePage /> },
+      { path: 'calendar', element: <CalendarPage /> },
       { path: 'stickies', element: <StickiesPage /> },
       { path: 'groups/:groupId', element: <GroupPage /> },
       { path: 'items/:itemId', element: <ItemPage /> },
