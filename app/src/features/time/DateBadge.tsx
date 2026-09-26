@@ -36,29 +36,49 @@ export function DateBadge({ item, className }: { item: Item; className?: string 
   );
 }
 
-/** The round to-do checkbox for items that are tasks. Ticking a repeat moves it on. */
-export function DoneToggle({ item, className }: { item: Item; className?: string }) {
-  if (!item.task) return null;
-  const done = item.task.done;
+/**
+ * A checkbox drawn to match the theme: round for to-do items, square for checklist lines.
+ */
+export function CheckControl({ checked, label, onToggle, shape = 'round', className, boxClassName }: { checked: boolean; label: string; onToggle: () => void; shape?: 'round' | 'square'; className?: string; boxClassName?: string }) {
   return (
     <button
       type="button"
       role="checkbox"
-      aria-checked={done}
-      aria-label={`Done: ${item.title || 'untitled'}`}
-      onClick={async (e) => {
+      aria-checked={checked}
+      aria-label={label}
+      onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
-        toastWithUndo(await toggleDoneWithUndo(item.id));
+        onToggle();
       }}
-      className={cn(
-        'relative z-10 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 outline-none focus-visible:ring-2 focus-visible:ring-focus',
-        done ? 'border-success bg-success text-bg' : 'border-muted hover:border-accent',
-        className,
-      )}
+      // A 24 px target (WCAG 2.2) around a 20 px box.
+      className={cn('group/check relative z-10 -m-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-focus', className)}
     >
-      {done && <Check size={12} strokeWidth={3} aria-hidden />}
+      <span
+        className={cn(
+          'flex h-5 w-5 items-center justify-center border-2',
+          shape === 'round' ? 'rounded-full' : 'rounded-[5px]',
+          checked ? 'border-success bg-success text-bg' : 'border-muted group-hover/check:border-accent',
+          boxClassName,
+        )}
+      >
+        {checked && <Check size={12} strokeWidth={3} aria-hidden />}
+      </span>
     </button>
+  );
+}
+
+/** The round to-do checkbox for items that are tasks. Ticking a repeat moves it on. */
+export function DoneToggle({ item, className, boxClassName }: { item: Item; className?: string; boxClassName?: string }) {
+  if (!item.task) return null;
+  return (
+    <CheckControl
+      checked={item.task.done}
+      label={`Done: ${item.title || 'untitled'}`}
+      onToggle={async () => toastWithUndo(await toggleDoneWithUndo(item.id))}
+      className={className}
+      boxClassName={boxClassName}
+    />
   );
 }
 

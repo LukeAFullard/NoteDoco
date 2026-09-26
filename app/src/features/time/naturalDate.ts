@@ -18,8 +18,13 @@ export interface NaturalDate {
   index: number;
 }
 
+/** Words chrono reads as dates that are usually just words in a note ("market stall at the weekend", "I may"). */
+const NOT_A_DATE = /^(?:(?:this|the|at the|on the) )?(?:weekend|week|month|year)$|^(?:now|may|march|sun|second|mon|a)$/i;
+
 export function parseNatural(text: string, now = new Date()): NaturalDate | null {
-  const r = parser().parse(text, now, { forwardDate: true })[0];
+  const r = parser()
+    .parse(text, now, { forwardDate: true })
+    .find((x) => !NOT_A_DATE.test(x.text.trim()) || x.text.trim() === text.trim());
   if (!r) return null;
   const timed = r.start.isCertain('hour');
   const start = r.start.date();

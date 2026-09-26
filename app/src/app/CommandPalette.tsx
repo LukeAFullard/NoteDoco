@@ -3,7 +3,7 @@ import { Command } from 'cmdk';
 import { useNavigate } from 'react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
-  CalendarDays, FilePlus, FlaskConical, FolderPlus, Hash, Inbox, Keyboard, Moon, Palette, Redo2, Search, Settings, StickyNote, Sun, Trash2, Undo2,
+  CalendarDays, FilePlus, FlaskConical, FolderPlus, Hash, Inbox, Keyboard, ListTodo, Moon, NotebookPen, Palette, Redo2, Search, Settings, StickyNote, Sun, Trash2, Undo2,
 } from 'lucide-react';
 import { db } from '@/data/db';
 import { useGroups } from '@/data/hooks';
@@ -15,6 +15,7 @@ import { useSearch } from '@/search/client';
 import { openNewGroup, useUi } from './ui';
 import { setTheme, useTheme } from './theme';
 import { redoWithToast, undoWithToast } from './undoActions';
+import { todayLocal } from '@/lib/time';
 
 interface Cmd {
   id: string;
@@ -57,6 +58,14 @@ export function CommandPalette() {
   const places: Cmd[] = [
     { id: 'today', label: 'Today', icon: <CalendarDays size={16} />, run: () => navigate('/today') },
     { id: 'inbox', label: 'Inbox', icon: <Inbox size={16} />, run: () => navigate('/inbox') },
+    { id: 'tasks', label: 'Tasks', icon: <ListTodo size={16} />, keywords: ['todo', 'to-do', 'checklist'], run: () => navigate('/tasks') },
+    {
+      id: 'daily',
+      label: 'Today’s page',
+      icon: <NotebookPen size={16} />,
+      keywords: ['daily', 'journal', 'diary'],
+      run: () => void import('@/data/repos/daily').then(async (m) => navigate(`/items/${await m.dailyPage(todayLocal())}`)),
+    },
     { id: 'stickies', label: 'Stickies', icon: <StickyNote size={16} />, keywords: ['wall', 'post-it'], run: () => navigate('/stickies') },
     ...groups.map((g) => ({
       id: `g-${g.id}`,

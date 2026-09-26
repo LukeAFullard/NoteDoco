@@ -137,10 +137,17 @@ export const itemSpan = (i: Pick<Item, 'when' | 'due'>): TimeSpan | null => i.wh
 
 export const isDone = (i: Pick<Item, 'task'>) => !!i.task?.done;
 
-/** Due before today (or, for timed due dates, before now) and not done or archived. */
-export function isOverdue(i: Pick<Item, 'due' | 'task' | 'archived'>, now = new Date()): boolean {
-  if (!i.due || isDone(i) || i.archived) return false;
-  return i.due.allDay ? (i.due.end ?? i.due.start) < todayLocal(now) : spanEnd(i.due) < now;
+/** Whether a span finished before today (all-day) or before now (timed). */
+const isPast = (s: TimeSpan, now: Date) => (s.allDay ? (s.end ?? s.start) < todayLocal(now) : spanEnd(s) < now);
+
+/**
+ * Overdue: not done or archived, and either its due date has passed, or it's a to-do whose
+ * date has passed.
+ */
+export function isOverdue(i: Pick<Item, 'due' | 'when' | 'task' | 'archived'>, now = new Date()): boolean {
+  if (isDone(i) || i.archived) return false;
+  if (i.due) return isPast(i.due, now);
+  return !!i.task && !!i.when && isPast(i.when, now);
 }
 
 // ---------------------------------------------------------------------------------------------

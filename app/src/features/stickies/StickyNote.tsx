@@ -83,7 +83,7 @@ export function StickyNote({
       {item.pinned && <Pin size={13} className="absolute top-1.5 right-1.5 opacity-60" aria-label="Pinned" />}
       {item.task && (
         <div className="mb-1.5 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-          {interactive ? <DoneToggle item={item} className="border-sticky-ink/60" /> : item.task.done && <Check size={14} aria-label="Done" />}
+          {interactive ? <DoneToggle item={item} boxClassName={item.task.done ? undefined : '!border-sticky-ink/70'} /> : item.task.done && <Check size={14} aria-label="Done" />}
         </div>
       )}
       <div className={cn(item.task?.done && 'line-through opacity-60')}>

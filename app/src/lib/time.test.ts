@@ -45,9 +45,12 @@ it('formats days and spans in words', () => {
 });
 
 it('knows when something is overdue', () => {
-  const base = { task: null, archived: false };
+  const base = { task: null, archived: false, when: null };
   expect(isOverdue({ ...base, due: allDaySpan('2026-09-25') }, now)).toBe(true);
   expect(isOverdue({ ...base, due: allDaySpan('2026-09-26') }, now)).toBe(false);
   expect(isOverdue({ ...base, due: allDaySpan('2026-09-25'), task: { done: true, doneAt: null } }, now)).toBe(false);
   expect(isOverdue({ ...base, due: timedSpan(new Date(2026, 8, 26, 9)) }, now)).toBe(true);
+  // An undone to-do whose date has passed is overdue; a plain dated note isn't.
+  expect(isOverdue({ ...base, due: null, when: allDaySpan('2026-09-25'), task: { done: false, doneAt: null } }, now)).toBe(true);
+  expect(isOverdue({ ...base, due: null, when: allDaySpan('2026-09-25') }, now)).toBe(false);
 });

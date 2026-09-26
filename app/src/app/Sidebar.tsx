@@ -1,6 +1,6 @@
 import { useState, type DragEvent, type ReactNode } from 'react';
 import { NavLink } from 'react-router';
-import { CalendarDays, FlaskConical, Hash, Inbox, Plus, Search, Settings, StickyNote, Trash2 } from 'lucide-react';
+import { CalendarDays, FlaskConical, Hash, Inbox, ListTodo, Plus, Search, Settings, StickyNote, Trash2 } from 'lucide-react';
 import { useGroupTree } from '@/data/hooks';
 import type { GroupNode } from '@/data/repos/groups';
 import { moveGroupWithUndo, moveItemsWithUndo } from '@/data/actions';
@@ -171,6 +171,9 @@ export function Sidebar() {
           }}
         >
           Inbox
+        </NavItem>
+        <NavItem to="/tasks" icon={<ListTodo size={16} />}>
+          Tasks
         </NavItem>
         <NavItem to="/stickies" icon={<StickyNote size={16} />}>
           Stickies

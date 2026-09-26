@@ -2,8 +2,9 @@ import { lazy, Suspense } from 'react';
 import { createHashRouter, Navigate, RouterProvider } from 'react-router';
 import { Shell } from './Shell';
 import { NewFromShortcut } from '@/features/capture/NewFromShortcut';
-import { TodayPage } from '@/features/today/TodayPage';
 
+const TodayPage = lazy(() => import('@/features/today/TodayPage').then((m) => ({ default: m.TodayPage })));
+const TasksPage = lazy(() => import('@/features/tasks/TasksPage').then((m) => ({ default: m.TasksPage })));
 const GroupPage = lazy(() => import('@/features/groups/GroupPage').then((m) => ({ default: m.GroupPage })));
 const TrashPage = lazy(() => import('@/features/trash/TrashPage').then((m) => ({ default: m.TrashPage })));
 const SettingsPage = lazy(() => import('@/features/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })));
@@ -25,6 +26,7 @@ const routes = [
       { index: true, element: <Navigate to="/today" replace /> },
       { path: 'today', element: <TodayPage /> },
       { path: 'inbox', element: <InboxPage /> },
+      { path: 'tasks', element: <TasksPage /> },
       { path: 'stickies', element: <StickiesPage /> },
       { path: 'groups/:groupId', element: <GroupPage /> },
       { path: 'items/:itemId', element: <ItemPage /> },

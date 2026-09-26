@@ -21,4 +21,7 @@ it('turns a capture line into text plus dates', () => {
   expect(parseCapture('weekly review every friday', sat)).toMatchObject({ text: 'weekly review', when: { start: '2026-10-02' }, recurrence: 'FREQ=WEEKLY;BYDAY=FR' });
   expect(parseCapture('water plants every day', sat)).toMatchObject({ text: 'water plants', when: { start: '2026-09-26' }, recurrence: 'FREQ=DAILY' });
   expect(parseCapture('just an idea', sat)).toEqual({ text: 'just an idea', when: null, due: null, recurrence: null });
+  // Everyday words aren't taken as dates inside a sentence.
+  expect(parseCapture('market stall at the weekend', sat)).toMatchObject({ text: 'market stall at the weekend', when: null });
+  expect(parseCapture('I may go', sat)).toMatchObject({ text: 'I may go', when: null });
 });
