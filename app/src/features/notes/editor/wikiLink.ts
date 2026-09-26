@@ -1,10 +1,9 @@
-import { Node, mergeAttributes } from '@tiptap/core';
+import { InputRule, Node, mergeAttributes } from '@tiptap/core';
 
 /**
- * Spike: a minimal `[[Wikilink]]` inline node, proving our own syntax can round-trip through
- * @tiptap/markdown instead of being escaped to `\[\[…\]\]`. The real feature (autocomplete,
- * backlinks, rename-rewrite) is NOTE-10 in Phase 5; the node itself should land in Phase 1 so
- * typed `[[links]]` are stored correctly from day one.
+ * `[[Wikilink]]` inline node. Without it, @tiptap/markdown stores typed links escaped as
+ * `\[\[…\]\]` (spike P0.8). Link features (autocomplete, backlinks, rename-rewrite) come in
+ * Phase 5 (NOTE-10); for now the node keeps the syntax intact and typing `[[name]]` creates it.
  */
 export const WikiLink = Node.create({
   name: 'wikiLink',
@@ -25,7 +24,18 @@ export const WikiLink = Node.create({
   },
 
   renderText({ node }) {
-    return node.attrs.target;
+    return `[[${node.attrs.target}]]`;
+  },
+
+  addInputRules() {
+    return [
+      new InputRule({
+        find: /\[\[([^\]\n]+)\]\]$/,
+        handler: ({ state, range, match }) => {
+          state.tr.replaceWith(range.from, range.to, this.type.create({ target: match[1]!.trim() }));
+        },
+      }),
+    ];
   },
 
   markdownTokenizer: {

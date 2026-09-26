@@ -1,9 +1,9 @@
 import { NavLink } from 'react-router';
-import { CalendarDays, FlaskConical, FolderPlus, Inbox, PenLine, Plus, Search, Settings, Trash2 } from 'lucide-react';
+import { CalendarDays, FlaskConical, Inbox, Plus, Search, Settings, StickyNote, Trash2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useGroupTree } from '@/data/hooks';
 import type { GroupNode } from '@/data/repos/groups';
-import { Menu, MenuItem } from '@/design/Menu';
+import { NewMenu } from '@/features/capture/NewMenu';
 import { Button } from '@/design/Button';
 import { Kbd } from '@/design/Kbd';
 import { cn } from '@/design/cn';
@@ -68,21 +68,7 @@ export function Sidebar() {
         </span>
       </div>
       <div className="flex gap-2 px-3 pb-3">
-        <Menu
-          label="Create"
-          trigger={
-            <Button variant="primary" size="sm" className="flex-1">
-              <Plus size={16} aria-hidden /> New
-            </Button>
-          }
-        >
-          <MenuItem onAction={() => openNewGroup()}>
-            <FolderPlus size={15} aria-hidden /> Group
-          </MenuItem>
-          <MenuItem href="#/lab/ink">
-            <PenLine size={15} aria-hidden /> Ink lab (prototype)
-          </MenuItem>
-        </Menu>
+        <NewMenu className="flex-1" />
         <Button variant="secondary" size="sm" onPress={openPalette} aria-label="Search and commands">
           <Search size={15} aria-hidden /> <Kbd>⌘K</Kbd>
         </Button>
@@ -93,6 +79,9 @@ export function Sidebar() {
         </NavItem>
         <NavItem to="/inbox" icon={<Inbox size={16} />}>
           Inbox
+        </NavItem>
+        <NavItem to="/stickies" icon={<StickyNote size={16} />}>
+          Stickies
         </NavItem>
         <div className="mt-5 mb-1 flex items-center justify-between px-2.5">
           <span className="text-xs font-semibold uppercase tracking-wide text-muted">Groups</span>

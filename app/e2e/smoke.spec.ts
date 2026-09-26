@@ -12,8 +12,10 @@ test('opens on Today with no console errors', async ({ page }) => {
 
 test('creates a group, trashes it with undo, and it comes back', async ({ page, isMobile }) => {
   await page.goto('/');
-  if (isMobile) await page.getByRole('button', { name: 'New group' }).click();
-  else await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'New group' }).click();
+  if (isMobile) {
+    await page.getByRole('navigation', { name: 'Quick navigation' }).getByRole('button', { name: 'New' }).click();
+    await page.getByRole('menuitem', { name: 'Group' }).click();
+  } else await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'New group' }).click();
   await page.getByRole('textbox', { name: 'Name' }).fill('Launch plan');
   await page.getByRole('radio', { name: 'Coral' }).click({ force: true });
   await page.getByRole('button', { name: 'Create group' }).click();

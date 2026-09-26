@@ -4,6 +4,7 @@ import type { Id, Item, ItemKind, NoteBody, StickyBody } from '../types';
 import { compareOrder, orderBetween } from '@/lib/order';
 import { nowIso } from '@/lib/ids';
 import type { ColourKey } from '@/lib/palette';
+import { analyseText } from '@/lib/textInfo';
 
 export const TRASH_RETENTION_DAYS = 30;
 
@@ -27,6 +28,7 @@ function blankItem(kind: ItemKind, groupId: Id | null, order: string): Item {
     preview: '',
     colour: null,
     tags: [],
+    manualTags: [],
     pinned: false,
     archived: false,
     when: null,
@@ -52,18 +54,18 @@ export async function listTrash(): Promise<Item[]> {
   return rows.sort((a, b) => (a.deletedAt! < b.deletedAt! ? 1 : -1));
 }
 
-/** Plain-text preview and title derived from a body, so lists never parse bodies. */
-export function derive(text: string): { title: string; preview: string; words: number } {
-  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
-  const strip = (s: string) => s.replace(/^#{1,6}\s+|^[-*+]\s+(\[[ xX]\]\s+)?|^>\s+/, '').trim();
-  const title = strip(lines[0] ?? '').slice(0, 120);
-  const preview = lines.slice(1).map(strip).join(' ').slice(0, 240);
-  const words = lines
-    .map(strip)
-    .join(' ')
-    .split(/\s+/)
-    .filter((w) => /[\p{L}\p{N}]/u.test(w)).length;
-  return { title, preview, words };
+/** Merges tags from the tag picker with #tags found in the text. */
+export const mergeTags = (manual: string[], inline: string[]): string[] => [...new Set([...manual, ...inline])].sort();
+
+/** Fields derived from a body, so lists never parse bodies. */
+function derivedFields(item: Item, text: string, format: NoteBody['format']): Partial<Item> {
+  const info = analyseText(text, format);
+  return {
+    title: info.title,
+    preview: info.preview,
+    tags: mergeTags(item.manualTags, info.tags),
+    stats: { checklistTotal: info.checklistTotal, checklistDone: info.checklistDone, words: info.words },
+  };
 }
 
 export async function createItem(input: NewItem): Promise<Id> {
@@ -71,10 +73,8 @@ export async function createItem(input: NewItem): Promise<Id> {
   const last = (await listItems(groupId)).at(-1);
   const item = blankItem(input.kind, groupId, orderBetween(last?.order ?? null, null));
   const text = input.text ?? '';
-  const d = derive(text);
-  item.title = input.title ?? d.title;
-  item.preview = d.preview;
-  item.stats.words = d.words;
+  Object.assign(item, derivedFields(item, text, input.format ?? 'markdown'));
+  if (input.title !== undefined) item.title = input.title;
   item.colour = input.colour ?? null;
 
   await db.transaction('rw', db.items, db.noteBodies, db.stickyBodies, async () => {
@@ -96,17 +96,56 @@ export async function updateItem(id: Id, patch: Partial<Omit<Item, keyof import(
   });
 }
 
-/** Saves a note or sticky body and refreshes the derived title/preview/stats. */
-export async function setBodyText(id: Id, text: string) {
+/** Saves a note or sticky body and refreshes the derived title/preview/stats/tags. */
+export async function setBodyText(id: Id, text: string, format?: NoteBody['format']) {
   await db.transaction('rw', db.items, db.noteBodies, db.stickyBodies, async () => {
     const it = await db.items.get(id);
     if (!it) throw new Error(`Item ${id} not found`);
-    const d = derive(text);
-    if (it.kind === 'note') await db.noteBodies.update(id, { text });
-    else if (it.kind === 'sticky') await db.stickyBodies.update(id, { text });
-    else throw new Error(`Item kind ${it.kind} has no text body`);
-    await db.items.put(touched(it, { title: d.title, preview: d.preview, stats: { ...it.stats, words: d.words } }));
+    let fmt: NoteBody['format'] = 'markdown';
+    if (it.kind === 'note') {
+      const body = await db.noteBodies.get(id);
+      fmt = format ?? body?.format ?? 'markdown';
+      await db.noteBodies.put({ itemId: id, format: fmt, text });
+    } else if (it.kind === 'sticky') {
+      await db.stickyBodies.update(id, { text });
+    } else throw new Error(`Item kind ${it.kind} has no text body`);
+    await db.items.put(touched(it, derivedFields(it, text, fmt)));
   });
+}
+
+/** Replaces the tags added with the tag picker (text #tags are kept). */
+export async function setManualTags(id: Id, manualTags: string[]) {
+  await db.transaction('rw', db.items, async () => {
+    const it = await db.items.get(id);
+    if (!it) throw new Error(`Item ${id} not found`);
+    const clean = [...new Set(manualTags.map((t) => t.trim().replace(/^#/, '').toLowerCase()).filter(Boolean))].sort();
+    const inline = it.tags.filter((t) => !it.manualTags.includes(t));
+    await db.items.put(touched(it, { manualTags: clean, tags: mergeTags(clean, inline) }));
+  });
+}
+
+/** Copies an item and its body into the same group, right after the original. */
+export async function duplicateItem(id: Id): Promise<Id> {
+  const it = await db.items.get(id);
+  if (!it) throw new Error(`Item ${id} not found`);
+  const note = it.kind === 'note' ? await db.noteBodies.get(id) : undefined;
+  const sticky = it.kind === 'sticky' ? await db.stickyBodies.get(id) : undefined;
+  const copyId = await createItem({
+    kind: it.kind,
+    groupId: it.groupId,
+    colour: it.colour,
+    text: note?.text ?? sticky?.text ?? '',
+    format: note?.format,
+    size: sticky?.size,
+  });
+  await db.transaction('rw', db.items, async () => {
+    const copy = (await db.items.get(copyId))!;
+    const sibs = await listItems(it.groupId);
+    const next = sibs[sibs.findIndex((s) => s.id === id) + 1];
+    const order = next && next.id !== copyId ? orderBetween(it.order, next.order) : copy.order;
+    await db.items.put({ ...copy, order, manualTags: it.manualTags, tags: it.tags });
+  });
+  return copyId;
 }
 
 /** Moves an item to a group (null = Inbox), before `beforeId` or last. */
@@ -156,4 +195,27 @@ export async function purgeTrash(days = TRASH_RETENTION_DAYS, now = new Date()):
     await db.attachments.where('itemId').anyOf(old).delete();
     return old.length;
   });
+}
+
+/**
+ * Removes an item that was created but never given any content (e.g. a new sticky closed
+ * straight away). It never had anything to restore, so it skips the Trash.
+ */
+export async function discardIfEmpty(id: Id): Promise<boolean> {
+  return db.transaction('rw', db.items, db.noteBodies, db.stickyBodies, async () => {
+    const it = await db.items.get(id);
+    if (!it) return false;
+    const text = it.kind === 'note' ? (await db.noteBodies.get(id))?.text : (await db.stickyBodies.get(id))?.text;
+    if ((text ?? '').trim() || it.manualTags.length) return false;
+    await db.items.delete(id);
+    await db.noteBodies.delete(id);
+    await db.stickyBodies.delete(id);
+    return true;
+  });
+}
+
+export async function setStickySize(id: Id, size: StickyBody['size']) {
+  await db.stickyBodies.update(id, { size });
+  const it = await db.items.get(id);
+  if (it) await db.items.put(touched(it, {}));
 }

@@ -9,7 +9,7 @@ import { Markdown } from '@tiptap/markdown';
 import { TaskItem, TaskList } from '@tiptap/extension-list';
 import { TableKit } from '@tiptap/extension-table';
 import Image from '@tiptap/extension-image';
-import { WikiLink } from './wikiLink';
+import { WikiLink } from '@/features/notes/editor/wikiLink';
 
 const CORPUS: Record<string, string> = {
   headings: '# Title\n\n## Section\n\n### Sub-section',

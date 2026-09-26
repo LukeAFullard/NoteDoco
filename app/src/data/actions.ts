@@ -1,11 +1,17 @@
 import { recordUndo } from './undo';
-import { moveItem, restoreItems, trashItems } from './repos/items';
-import { restoreGroup, trashGroup } from './repos/groups';
+import { createItem, duplicateItem, moveItem, restoreItems, trashItems, updateItem } from './repos/items';
+import { restoreGroup, trashGroup, updateGroup } from './repos/groups';
 import { db } from './db';
 import { touched } from './meta';
-import type { Id } from './types';
+import type { Id, Item } from './types';
+import type { ColourKey } from '@/lib/palette';
 
-/** User-facing actions: the repository call plus an undo entry. Returns the toast label. */
+/**
+ * User-facing actions: the repository call plus an undo entry. Each returns the toast message,
+ * so the caller can show it with an Undo button.
+ */
+
+const plural = (n: number, one: string, many: string) => (n === 1 ? one : `${n} ${many}`);
 
 export async function trashItemsWithUndo(ids: Id[]): Promise<string> {
   await trashItems(ids);
@@ -14,20 +20,57 @@ export async function trashItemsWithUndo(ids: Id[]): Promise<string> {
   return label;
 }
 
-export async function moveItemWithUndo(id: Id, groupId: Id | null): Promise<string> {
-  const before = await db.items.get(id);
-  if (!before) throw new Error(`Item ${id} not found`);
-  await moveItem(id, groupId);
+/** Moves items to a group (null = Inbox); undo puts each back exactly where it was. */
+export async function moveItemsWithUndo(ids: Id[], groupId: Id | null): Promise<string> {
+  const before = (await db.items.bulkGet(ids)).filter((i): i is Item => !!i);
+  for (const id of ids) await moveItem(id, groupId);
+  const target = groupId ? (await db.groups.get(groupId))?.name ?? 'group' : 'Inbox';
+  const label = `Moved ${plural(ids.length, 'item', 'items')} to ${target}`;
   recordUndo({
-    label: 'Moved',
-    // Restore the exact previous position, not just the group.
+    label,
     undo: async () => {
-      const now = await db.items.get(id);
-      if (now) await db.items.put(touched(now, { groupId: before.groupId, order: before.order }));
+      for (const b of before) {
+        const now = await db.items.get(b.id);
+        if (now) await db.items.put(touched(now, { groupId: b.groupId, order: b.order }));
+      }
     },
-    redo: () => moveItem(id, groupId),
+    redo: async () => {
+      for (const id of ids) await moveItem(id, groupId);
+    },
   });
-  return 'Moved';
+  return label;
+}
+
+/** Kept for existing callers: single-item move. */
+export const moveItemWithUndo = (id: Id, groupId: Id | null) => moveItemsWithUndo([id], groupId);
+
+async function setFieldWithUndo<K extends 'pinned' | 'colour' | 'archived'>(ids: Id[], field: K, value: Item[K], label: string) {
+  const before = (await db.items.bulkGet(ids)).filter((i): i is Item => !!i).map((i) => [i.id, i[field]] as const);
+  for (const id of ids) await updateItem(id, { [field]: value } as Partial<Item>);
+  recordUndo({
+    label,
+    undo: async () => {
+      for (const [id, v] of before) await updateItem(id, { [field]: v } as Partial<Item>);
+    },
+    redo: async () => {
+      for (const id of ids) await updateItem(id, { [field]: value } as Partial<Item>);
+    },
+  });
+  return label;
+}
+
+export const setPinnedWithUndo = (ids: Id[], pinned: boolean) =>
+  setFieldWithUndo(ids, 'pinned', pinned, pinned ? `Pinned ${plural(ids.length, 'item', 'items')}` : 'Unpinned');
+
+export const setColourWithUndo = (ids: Id[], colour: ColourKey | null) => setFieldWithUndo(ids, 'colour', colour, 'Colour changed');
+
+export const setArchivedWithUndo = (ids: Id[], archived: boolean) =>
+  setFieldWithUndo(ids, 'archived', archived, archived ? `Archived ${plural(ids.length, 'item', 'items')}` : 'Unarchived');
+
+export async function duplicateWithUndo(id: Id): Promise<{ id: Id; label: string }> {
+  const copy = await duplicateItem(id);
+  recordUndo({ label: 'Duplicated', undo: () => trashItems([copy]), redo: () => restoreItems([copy]) });
+  return { id: copy, label: 'Duplicated' };
 }
 
 export async function trashGroupWithUndo(id: Id): Promise<string> {
@@ -35,3 +78,12 @@ export async function trashGroupWithUndo(id: Id): Promise<string> {
   recordUndo({ label: 'Group moved to Trash', undo: () => restoreGroup(id), redo: async () => void (await trashGroup(id)) });
   return 'Group moved to Trash';
 }
+
+export async function archiveGroupWithUndo(id: Id, archived: boolean): Promise<string> {
+  await updateGroup(id, { archived });
+  const label = archived ? 'Group archived' : 'Group unarchived';
+  recordUndo({ label, undo: () => updateGroup(id, { archived: !archived }), redo: () => updateGroup(id, { archived }) });
+  return label;
+}
+
+export { createItem };

@@ -1,6 +1,6 @@
 import { db } from './db';
 import { buildTree, createGroup, listGroups, moveGroup, restoreGroup, trashGroup, updateGroup } from './repos/groups';
-import { createItem, derive, listItems, listTrash, moveItem, purgeTrash, restoreItems, setBodyText, trashItems } from './repos/items';
+import { createItem, duplicateItem, listItems, setManualTags, listTrash, moveItem, purgeTrash, restoreItems, setBodyText, trashItems } from './repos/items';
 import { moveItemWithUndo, trashItemsWithUndo } from './actions';
 import { redo, undo, useUndo } from './undo';
 import { describeStorageError, openStorage, useStorageHealth } from './health';
@@ -55,9 +55,28 @@ describe('groups', () => {
 });
 
 describe('items', () => {
-  it('derives title, preview and word count from the body', () => {
-    expect(derive('# Groceries\n- [ ] milk\n- [x] eggs\n')).toEqual({ title: 'Groceries', preview: 'milk eggs', words: 3 });
-    expect(derive('')).toEqual({ title: '', preview: '', words: 0 });
+  it('derives title, preview, checklist stats and tags on save', async () => {
+    const id = await createItem({ kind: 'note', text: '# Groceries\n- [ ] milk\n- [x] eggs #food' });
+    const it = (await db.items.get(id))!;
+    expect(it).toMatchObject({ title: 'Groceries', preview: 'milk eggs #food', tags: ['food'] });
+    expect(it.stats).toEqual({ checklistTotal: 2, checklistDone: 1, words: 4 });
+  });
+
+  it('merges picker tags with text tags and keeps them apart', async () => {
+    const id = await createItem({ kind: 'note', text: 'Plan #work' });
+    await setManualTags(id, ['#Urgent', 'urgent', ' client ']);
+    expect((await db.items.get(id))!.tags).toEqual(['client', 'urgent', 'work']);
+    await setBodyText(id, 'Plan, no tags now');
+    expect((await db.items.get(id))!.tags).toEqual(['client', 'urgent']);
+  });
+
+  it('duplicates an item right after the original', async () => {
+    const a = await createItem({ kind: 'sticky', text: 'a', colour: 'mint' });
+    const b = await createItem({ kind: 'sticky', text: 'b' });
+    const c = await duplicateItem(a);
+    expect((await listItems(null)).map((i) => i.id)).toEqual([a, c, b]);
+    expect((await db.stickyBodies.get(c))!.text).toBe('a');
+    expect((await db.items.get(c))!.colour).toBe('mint');
   });
 
   it('creates notes and stickies with bodies, in the Inbox by default', async () => {

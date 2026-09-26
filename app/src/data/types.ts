@@ -61,7 +61,10 @@ export interface Item extends Meta {
   title: string;
   preview: string;
   colour: ColourKey | null;
+  /** All tags (indexed): tags added with the tag picker plus #tags written in the text. */
   tags: string[];
+  /** Tags added with the tag picker. The rest of `tags` comes from the text. */
+  manualTags: string[];
   pinned: boolean;
   archived: boolean;
   when: TimeSpan | null;

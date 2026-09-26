@@ -1,12 +1,14 @@
 import { lazy, Suspense } from 'react';
 import { createHashRouter, Navigate, RouterProvider } from 'react-router';
 import { Shell } from './Shell';
+import { NewFromShortcut } from '@/features/capture/NewFromShortcut';
 import { TodayPage } from '@/features/today/TodayPage';
-import { InboxPage } from '@/features/inbox/InboxPage';
 
 const GroupPage = lazy(() => import('@/features/groups/GroupPage').then((m) => ({ default: m.GroupPage })));
 const TrashPage = lazy(() => import('@/features/trash/TrashPage').then((m) => ({ default: m.TrashPage })));
 const SettingsPage = lazy(() => import('@/features/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })));
+const ItemPage = lazy(() => import('@/features/items/ItemPage').then((m) => ({ default: m.ItemPage })));
+const InboxPage = lazy(() => import('@/features/inbox/InboxPage').then((m) => ({ default: m.InboxPage })));
 const DevGallery = lazy(() => import('@/features/dev/DevGallery').then((m) => ({ default: m.DevGallery })));
 const UpdatePrompt = lazy(() => import('./UpdatePrompt').then((m) => ({ default: m.UpdatePrompt })));
 const InkLab = lazy(() => import('@/lab/ink/InkLab').then((m) => ({ default: m.InkLab })));
@@ -21,18 +23,30 @@ const routes = [
       { path: 'today', element: <TodayPage /> },
       { path: 'inbox', element: <InboxPage /> },
       { path: 'groups/:groupId', element: <GroupPage /> },
+      { path: 'items/:itemId', element: <ItemPage /> },
       { path: 'trash', element: <TrashPage /> },
       { path: 'settings', element: <SettingsPage /> },
       { path: 'dev', element: <DevGallery /> },
       { path: 'lab/ink', element: <InkLab /> },
-      // App-icon shortcuts point here; notes and stickies arrive in Phase 1.
-      { path: 'new/:kind', element: <Navigate to="/inbox" replace /> },
+      // App-icon shortcuts (manifest) create an item in the Inbox and open it.
+      { path: 'new/:kind', element: <NewFromShortcut /> },
       { path: '*', element: <Navigate to="/today" replace /> },
     ],
   },
 ];
 
 const router = createHashRouter(routes);
+
+// Preload the note editor once the app is idle, so pressing N and typing straight away never
+// loses the first keystrokes while the editor downloads.
+const preload = () => {
+  void import('@/features/items/ItemPage');
+  void import('@/features/notes/NoteEditor');
+};
+if (typeof window !== 'undefined') {
+  if ('requestIdleCallback' in window) window.requestIdleCallback(preload, { timeout: 4000 });
+  else setTimeout(preload, 2000);
+}
 
 export function App() {
   return (

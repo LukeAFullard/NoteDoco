@@ -7,8 +7,14 @@ export function isTypingTarget(el: EventTarget | null): boolean {
   return el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName);
 }
 
+export interface ShortcutActions {
+  newNote: () => void;
+  newSticky: () => void;
+  showShortcuts: () => void;
+}
+
 /** App-wide keyboard shortcuts. Editors handle their own undo while focused. */
-export function useGlobalShortcuts() {
+export function useGlobalShortcuts(actions: ShortcutActions) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;
@@ -17,7 +23,13 @@ export function useGlobalShortcuts() {
         openPalette();
         return;
       }
-      if (isTypingTarget(e.target)) return;
+      if (isTypingTarget(e.target) || document.querySelector('[role="dialog"]')) return;
+      if (!mod && !e.altKey) {
+        const k = e.key.toLowerCase();
+        if (k === 'n') return void (e.preventDefault(), actions.newNote());
+        if (k === 's') return void (e.preventDefault(), actions.newSticky());
+        if (e.key === '?') return void (e.preventDefault(), actions.showShortcuts());
+      }
       if (mod && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         void (e.shiftKey ? redoWithToast() : undoWithToast());
@@ -28,5 +40,5 @@ export function useGlobalShortcuts() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [actions]);
 }
