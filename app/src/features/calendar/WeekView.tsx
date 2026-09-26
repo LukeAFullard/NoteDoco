@@ -6,6 +6,7 @@ import { packLane, type Entry } from '@/features/timeline/layout';
 import { byDay, dayExtent, weekDays } from './grid';
 import { CalendarChip } from './CalendarChip';
 import { keyMoveHandler } from './keys';
+import { ItemDropZone } from '@/features/items/DropZone';
 import type { CalendarViewProps } from './MonthView';
 
 const HOUR = 48;
@@ -22,7 +23,7 @@ function useNowMinute() {
 }
 
 /** Week (TIME-11): an all-day row and a time grid; drag to move or to change the end. */
-export function WeekView({ anchor, weekStart, placed, open, drag, onKeyMove, onCreate, onPickDay }: CalendarViewProps) {
+export function WeekView({ anchor, weekStart, placed, open, drag, onKeyMove, onCreate, onPickDay, onDropItems }: CalendarViewProps) {
   const days = weekDays(anchor, weekStart);
   const today = todayLocal();
   const now = useNowMinute();
@@ -61,7 +62,7 @@ export function WeekView({ anchor, weekStart, placed, open, drag, onKeyMove, onC
           All day
         </div>
         {days.map((d) => (
-          <div key={d} data-cal-day={d} onDoubleClick={(e) => e.target === e.currentTarget && onCreate(d, null)} className="flex min-h-9 min-w-0 flex-1 flex-col gap-0.5 border-l border-border p-0.5">
+          <ItemDropZone key={d} onDropItems={(ids) => onDropItems(ids, d)} data-cal-day={d} onDoubleClick={(e) => e.target === e.currentTarget && onCreate(d, null)} className="flex min-h-9 min-w-0 flex-1 flex-col gap-0.5 border-l border-border p-0.5">
             {allDay.get(d)!.map((p) => (
               <CalendarChip
                 key={`${p.item.id}@${p.span.start}`}
@@ -73,7 +74,7 @@ export function WeekView({ anchor, weekStart, placed, open, drag, onKeyMove, onC
                 onKeyDown={keyMoveHandler(p, onKeyMove, 7)}
               />
             ))}
-          </div>
+          </ItemDropZone>
         ))}
       </div>
       <div ref={grid} tabIndex={0} role="region" aria-label="Times of day" className="relative min-h-0 flex-1 overflow-y-auto outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus">

@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router';
 import {
-  Archive, CalendarClock, CalendarPlus, CheckCircle2, Circle, Combine, Copy, Download, ExternalLink, FileText, FolderInput, Inbox, ListTodo, MoreHorizontal, Palette, Pin, PinOff, Trash2,
+  Archive, CalendarClock, CalendarPlus, Columns2, CheckCircle2, Circle, Combine, Copy, Download, ExternalLink, FileText, FolderInput, Inbox, ListTodo, MoreHorizontal, Palette, Pin, PinOff, Trash2,
 } from 'lucide-react';
 import { Menu as AriaMenu, MenuTrigger, Popover, SubmenuTrigger } from 'react-aria-components';
 import type { Item } from '@/data/types';
@@ -11,6 +11,7 @@ import {
 import { openDateDialog } from '@/app/ui';
 import { parseRule } from '@/lib/recurrence';
 import { openSticky } from '@/features/stickies/stickyDialog';
+import { openPane } from '@/features/panes/store';
 import { toastWithUndo } from '@/app/undoActions';
 import { IconButton } from '@/design/Button';
 import { MenuItem } from '@/design/Menu';
@@ -38,6 +39,11 @@ export function ItemActionsMenu({ items, onOpen, triggerLabel = 'Item actions' }
           {single && onOpen && (
             <MenuItem onAction={onOpen}>
               <ExternalLink size={15} aria-hidden /> Open
+            </MenuItem>
+          )}
+          {single && (
+            <MenuItem onAction={() => openPane(`/items/${single.id}`)}>
+              <Columns2 size={15} aria-hidden /> Open in a new pane
             </MenuItem>
           )}
           <MenuItem onAction={() => openDateDialog(ids)}>

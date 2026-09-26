@@ -3,7 +3,7 @@ import { Command } from 'cmdk';
 import { useNavigate } from 'react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
-  CalendarDays, CalendarRange, ChartGantt, FilePlus, FlaskConical, FolderPlus, Hash, Inbox, Keyboard, ListTodo, Moon, NotebookPen, Palette, Redo2, Search, Settings, StickyNote, Sun, Trash2, Undo2,
+  CalendarDays, CalendarRange, ChartGantt, Columns2, Columns3, FilePlus, FlaskConical, FolderPlus, Hash, Inbox, Keyboard, ListTodo, Moon, NotebookPen, Palette, Redo2, Search, Settings, StickyNote, Sun, Trash2, Undo2,
 } from 'lucide-react';
 import { db } from '@/data/db';
 import { useGroups } from '@/data/hooks';
@@ -60,6 +60,7 @@ export function CommandPalette() {
     { id: 'inbox', label: 'Inbox', icon: <Inbox size={16} />, run: () => navigate('/inbox') },
     { id: 'timeline', label: 'Timeline', icon: <ChartGantt size={16} />, keywords: ['lanes', 'gantt', 'plan', 'schedule'], run: () => navigate('/timeline') },
     { id: 'calendar', label: 'Calendar', icon: <CalendarRange size={16} />, keywords: ['month', 'week', 'agenda'], run: () => navigate('/calendar') },
+    { id: 'columns', label: 'Groups side by side', icon: <Columns3 size={16} />, keywords: ['columns', 'compare', 'kanban'], run: () => navigate('/columns') },
     { id: 'tasks', label: 'Tasks', icon: <ListTodo size={16} />, keywords: ['todo', 'to-do', 'checklist'], run: () => navigate('/tasks') },
     {
       id: 'daily',
@@ -87,6 +88,13 @@ export function CommandPalette() {
     { id: 'new-note', label: 'New note', icon: <FilePlus size={16} />, run: () => void create.note() },
     { id: 'new-sticky', label: 'New sticky', icon: <StickyNote size={16} />, run: () => void create.sticky() },
     { id: 'new-group', label: 'New group', icon: <FolderPlus size={16} />, run: () => openNewGroup() },
+    {
+      id: 'split',
+      label: 'Split view: open this beside',
+      icon: <Columns2 size={16} />,
+      keywords: ['pane', 'side by side', 'split'],
+      run: () => void import('@/features/panes/store').then((m) => m.openPane(location.hash.slice(1) || '/today')),
+    },
     { id: 'undo', label: 'Undo', icon: <Undo2 size={16} />, run: () => void undoWithToast() },
     { id: 'redo', label: 'Redo', icon: <Redo2 size={16} />, run: () => void redoWithToast() },
     {

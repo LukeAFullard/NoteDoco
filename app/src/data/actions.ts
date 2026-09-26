@@ -3,11 +3,11 @@ import { createItem, duplicateItem, moveItem, restoreItems, trashItems, updateIt
 import { moveGroup, restoreGroup, trashGroup, updateGroup } from './repos/groups';
 import { db } from './db';
 import { touched } from './meta';
-import type { Id, Item, TimeSpan } from './types';
+import type { Id, Item, LocalDate, TimeSpan } from './types';
 import type { ColourKey } from '@/lib/palette';
 import { completeItem, getBodyText, reopenItem, toggleChecklistLine, type CompleteResult } from './repos/time';
 import { setBodyText } from './repos/items';
-import { addDays, allDaySpan, diffDays, formatDay, formatSpan, spanStart } from '@/lib/time';
+import { addDays, allDaySpan, diffDays, formatDay, formatSpan, shiftSpan, spanDays, spanStart } from '@/lib/time';
 
 /**
  * User-facing actions: the repository call plus an undo entry. Each returns the toast message,
@@ -221,4 +221,30 @@ export async function rescheduleWithUndo(
   }
   if (extra.colour !== undefined && extra.colour !== item.colour && extra.groupId === undefined) label += ', colour changed';
   return setTimeWithUndo([item.id], { [field]: next, reminders, ...extra }, label);
+}
+
+/**
+ * Puts items on a day (dropped onto a calendar day, the timeline or Today): dated items move
+ * there keeping their time and length; undated ones get that day. Undoable.
+ */
+export async function dateItemsWithUndo(ids: Id[], day: LocalDate, extra: Partial<Pick<Item, 'groupId' | 'colour'>> = {}): Promise<string> {
+  const items = (await db.items.bulkGet(ids)).filter((i): i is Item => !!i);
+  const before = items.map((i) => [i.id, timeFields(i)] as [Id, TimeFields]);
+  const apply = async () => {
+    for (const it of items) {
+      const field = it.when || !it.due ? 'when' : 'due';
+      const span = it[field];
+      const next = span ? shiftSpan(span, diffDays(spanDays(span)[0], day)) : allDaySpan(day);
+      const shiftMs = span ? spanStart(next).getTime() - spanStart(span).getTime() : 0;
+      await updateItem(it.id, {
+        [field]: next,
+        reminders: it.reminders.map((r) => ({ ...r, at: new Date(Date.parse(r.at) + shiftMs).toISOString(), firedAt: null })),
+        ...extra,
+      });
+    }
+  };
+  await apply();
+  const label = `${items.length === 1 ? 'Moved' : `Moved ${items.length} items`} to ${formatDay(day)}`;
+  recordUndo({ label, undo: () => restoreFields(before), redo: apply });
+  return label;
 }

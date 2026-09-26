@@ -9,7 +9,7 @@ import { toastWithUndo } from '@/app/undoActions';
 import { Button, IconButton } from '@/design/Button';
 import { cn } from '@/design/cn';
 import { placedBetween, type Placed } from '@/data/agenda';
-import { rescheduleWithUndo } from '@/data/actions';
+import { dateItemsWithUndo, rescheduleWithUndo } from '@/data/actions';
 import { useGroups } from '@/data/hooks';
 import { createItem } from '@/data/repos/items';
 import type { Group, Item, LocalDate, TimeSpan } from '@/data/types';
@@ -153,6 +153,7 @@ export function CalendarPage() {
     onKeyMove,
     onCreate: (d: LocalDate, m: number | null) => void onCreate(d, m),
     onPickDay: (d: LocalDate) => go({ view: view === 'month' && !narrow ? 'week' : 'agenda', date: d }),
+    onDropItems: async (ids: string[], d: LocalDate) => toastWithUndo(await dateItemsWithUndo(ids, d)),
     narrow,
   };
 

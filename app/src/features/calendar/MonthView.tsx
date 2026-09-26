@@ -9,6 +9,7 @@ import { byDay, monthGrid } from './grid';
 import { CalendarChip } from './CalendarChip';
 import type { useCalendarDrag } from './useCalendarDrag';
 import { keyMoveHandler } from './keys';
+import { ItemDropZone } from '@/features/items/DropZone';
 
 export interface CalendarViewProps {
   anchor: LocalDate;
@@ -21,6 +22,8 @@ export interface CalendarViewProps {
   onKeyMove: (p: Placed, days: number, minutes?: number) => void;
   onCreate: (day: LocalDate, minutes: number | null) => void;
   onPickDay: (day: LocalDate) => void;
+  /** Items dragged in from a list or another pane (WS-2). */
+  onDropItems: (ids: string[], day: LocalDate) => void;
   narrow: boolean;
 }
 
@@ -28,7 +31,7 @@ const MAX_CHIPS = 4;
 const dayName = (d: LocalDate, style: 'short' | 'narrow') => new Intl.DateTimeFormat(undefined, { weekday: style }).format(new Date(`${d}T12:00`));
 
 /** Month (TIME-11): six weeks of days; on phones, dots per day and the chosen day's list below. */
-export function MonthView({ anchor, weekStart, placed, groups, open, drag, onKeyMove, onCreate, onPickDay, narrow }: CalendarViewProps) {
+export function MonthView({ anchor, weekStart, placed, groups, open, drag, onKeyMove, onCreate, onPickDay, onDropItems, narrow }: CalendarViewProps) {
   const days = monthGrid(anchor, weekStart);
   const entries = byDay(placed, days);
   const month = anchor.slice(0, 7);
@@ -105,8 +108,10 @@ export function MonthView({ anchor, weekStart, placed, groups, open, drag, onKey
               const list = entries.get(d)!;
               const more = list.length - MAX_CHIPS;
               return (
-                <section
+                <ItemDropZone
                   key={d}
+                  role="group"
+                  onDropItems={(ids) => onDropItems(ids, d)}
                   data-cal-day={d}
                   aria-label={formatLongDay(d)}
                   onDoubleClick={(e) => e.target === e.currentTarget && onCreate(d, null)}
@@ -148,7 +153,7 @@ export function MonthView({ anchor, weekStart, placed, groups, open, drag, onKey
                       +{more} more
                     </button>
                   )}
-                </section>
+                </ItemDropZone>
               );
             })}
           </div>

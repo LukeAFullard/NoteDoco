@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
 /** Serious and critical accessibility problems fail the build (plan §14). */
-const PAGES = ['/#/today', '/#/tasks', '/#/timeline', '/#/calendar', '/#/calendar?view=week', '/#/inbox', '/#/stickies', '/#/search?q=plan', '/#/tags', '/#/trash', '/#/settings', '/#/lab/ink'];
+const PAGES = ['/#/today', '/#/tasks', '/#/timeline', '/#/calendar', '/#/calendar?view=week', '/#/columns', '/#/inbox', '/#/stickies', '/#/search?q=plan', '/#/tags', '/#/trash', '/#/settings', '/#/lab/ink'];
 
 for (const theme of ['dark', 'light'] as const) {
   test.describe(`accessibility (${theme})`, () => {

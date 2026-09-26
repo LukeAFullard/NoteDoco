@@ -12,6 +12,7 @@ import { cn } from '@/design/cn';
 import { useDebouncedSave } from '@/lib/useDebouncedSave';
 import { useKeyboardInset } from '@/lib/useKeyboardInset';
 import { openDateDialog, useUi } from '@/app/ui';
+import { useIsActivePane } from '@/app/paneContext';
 import { resolveDateMentions } from '@/lib/dateMentions';
 import { DateBadge, DoneToggle } from '@/features/time/DateBadge';
 import { noteExtensions } from './editor/extensions';
@@ -21,6 +22,7 @@ import { INSERT_IMAGE_EVENT } from './editor/slashCommands';
 import { TagEditor } from '@/features/tags/TagEditor';
 import { SNAPSHOT_INTERVAL_MS, snapshotNote } from '@/data/repos/versions';
 import { HistoryDialog } from './HistoryDialog';
+import { OPEN_HISTORY_EVENT } from '@/features/items/events';
 
 type Mode = 'rich' | 'source';
 type SaveState = 'saved' | 'saving';
@@ -159,6 +161,7 @@ export function NoteEditor({ item }: { item: Item }) {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const focusMode = useUi((s) => s.focusMode);
+  const isActive = useIsActivePane();
   const latest = useRef<string | null>(null);
 
   // Load the body once per note. Later changes come from this editor, so we don't live-reload
@@ -221,6 +224,7 @@ export function NoteEditor({ item }: { item: Item }) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (!isActive()) return;
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f' && body?.format === 'markdown' && mode === 'rich') {
         e.preventDefault();
         setFindOpen(true);
@@ -229,9 +233,19 @@ export function NoteEditor({ item }: { item: Item }) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [body?.format, mode]);
+  }, [body?.format, mode, isActive]);
 
   useEffect(() => () => useUi.setState({ focusMode: false }), []);
+
+  // The inspector's "Version history" button.
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      if ((e as CustomEvent<string>).detail !== item.id) return;
+      void flush().then(() => setHistoryOpen(true));
+    };
+    window.addEventListener(OPEN_HISTORY_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_HISTORY_EVENT, onOpen);
+  }, [item.id, flush]);
 
   if (!body) return null;
   const plain = body.format === 'plain';

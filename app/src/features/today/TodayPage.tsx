@@ -9,6 +9,9 @@ import { db } from '@/data/db';
 import { useGroups } from '@/data/hooks';
 import { overdueItems, placedBetween, taskLines, type Placed } from '@/data/agenda';
 import { dailyPage } from '@/data/repos/daily';
+import { dateItemsWithUndo } from '@/data/actions';
+import { toastWithUndo } from '@/app/undoActions';
+import { ItemDropZone } from '@/features/items/DropZone';
 import type { Group } from '@/data/types';
 import { addDays, formatDay, formatLongDay, todayLocal } from '@/lib/time';
 import { CaptureBar } from '@/features/capture/CaptureBar';
@@ -97,7 +100,7 @@ export function TodayPage() {
             </section>
           )}
 
-          <section aria-label="Today’s plan">
+          <ItemDropZone role="region" aria-label="Today’s plan" className="rounded-panel" onDropItems={async (ids) => toastWithUndo(await dateItemsWithUndo(ids, today))}>
             <Heading count={(data?.today.length ?? 0) + (data?.linesToday.length ?? 0)}>Today</Heading>
             {nothingToday ? (
               <div className="flex items-start gap-3 rounded-panel border border-dashed border-border px-4 py-5 text-sm text-muted">
@@ -112,7 +115,7 @@ export function TodayPage() {
                 {data?.linesToday.map((l) => <TaskLineRow key={l.ref.id} line={l} groups={groups} />)}
               </ul>
             )}
-          </section>
+          </ItemDropZone>
 
           {byDay.size > 0 && (
             <section aria-label="Coming up">

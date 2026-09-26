@@ -1,7 +1,7 @@
 import { db } from './db';
 import { freshDb } from '@/test/db';
 import { createItem, setBodyText } from './repos/items';
-import { applySpanChange, completeWithUndo, rescheduleWithUndo, setTimeWithUndo, toggleChecklistLineWithUndo } from './actions';
+import { applySpanChange, completeWithUndo, dateItemsWithUndo, rescheduleWithUndo, setTimeWithUndo, toggleChecklistLineWithUndo } from './actions';
 import { undo } from './undo';
 import { allDaySpan, timedSpan, todayLocal, addDays } from '@/lib/time';
 
@@ -98,4 +98,16 @@ it('moves a whole repeat when one of its later occurrences is dragged', () => {
   const moved = applySpanChange(t, t, timedSpan(new Date(2026, 9, 1, 11), new Date(2026, 9, 1, 12)));
   expect(new Date(moved.start).getHours()).toBe(11);
   expect(new Date(moved.end!).getHours()).toBe(12);
+});
+
+it('dates dropped items: dated ones keep their time, undated ones get the day', async () => {
+  const dated = await createItem({ kind: 'sticky', text: 'a', when: timedSpan(new Date(2026, 9, 1, 15), new Date(2026, 9, 1, 16)) });
+  const undated = await createItem({ kind: 'sticky', text: 'b' });
+  await dateItemsWithUndo([dated, undated], '2026-10-05', { groupId: null });
+  const a = (await db.items.get(dated))!;
+  expect(new Date(a.when!.start).getDate()).toBe(5);
+  expect(new Date(a.when!.start).getHours()).toBe(15);
+  expect((await db.items.get(undated))!.when).toEqual(allDaySpan('2026-10-05'));
+  await undo();
+  expect((await db.items.get(undated))!.when).toBeNull();
 });

@@ -12,6 +12,8 @@ import { formatSpan, formatSpanTime, isOverdue } from '@/lib/time';
 import { KIND_ICONS, itemTitle } from '@/features/items/kinds';
 import { ItemActionsMenu } from '@/features/items/ItemMenu';
 import { openSticky } from '@/features/stickies/stickyDialog';
+import { openPane } from '@/features/panes/store';
+import { canDrag, setDragItems } from '@/lib/dnd';
 import { CheckControl, DoneToggle, MentionText } from './DateBadge';
 
 /** A link that opens a note's page, or a sticky over the current screen. */
@@ -20,7 +22,11 @@ export function ItemLink({ item, className, children }: { item: Item; className?
     <Link
       to={`/items/${item.id}`}
       onClick={(e) => {
-        if (item.kind === 'sticky') {
+        if (e.shiftKey) {
+          // Shift-click: open beside (WS-3).
+          e.preventDefault();
+          openPane(`/items/${item.id}`);
+        } else if (item.kind === 'sticky') {
           e.preventDefault();
           openSticky(item.id);
         }
@@ -59,7 +65,12 @@ export function AgendaItemRow({ entry, groups, showDate = false, time = true }: 
   const overdue = isOverdue(item);
   const done = !!item.task?.done && !projected;
   return (
-    <li className="group flex items-start gap-3 rounded-panel px-2 py-2 hover:bg-surface-2/60" data-item-id={item.id}>
+    <li
+      className="group flex items-start gap-3 rounded-panel px-2 py-2 hover:bg-surface-2/60"
+      data-item-id={item.id}
+      draggable={canDrag()}
+      onDragStart={(e) => setDragItems(e, [item.id])}
+    >
       {time && <span className="hidden w-16 shrink-0 pt-0.5 text-right font-mono text-xs text-muted sm:block">{entry.basis === 'due' ? 'Due' : span.allDay ? '' : formatSpanTime(span)}</span>}
       {item.task && !projected ? <DoneToggle item={item} className="mt-0.5" /> : <KindMark item={item} />}
       <div className="min-w-0 flex-1">

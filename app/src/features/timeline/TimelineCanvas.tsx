@@ -4,7 +4,8 @@ import { ChevronDown, ChevronRight, Plus } from 'lucide-react';
 import type { Placed } from '@/data/agenda';
 import type { Item, LocalDate, TimeSpan } from '@/data/types';
 import { createItem } from '@/data/repos/items';
-import { rescheduleWithUndo, trashItemsWithUndo } from '@/data/actions';
+import { dateItemsWithUndo, rescheduleWithUndo, trashItemsWithUndo } from '@/data/actions';
+import { dragKind, readDragItems } from '@/lib/dnd';
 import { toastWithUndo } from '@/app/undoActions';
 import { cn } from '@/design/cn';
 import { addDays, allDaySpan, diffDays, timedSpan, todayLocal } from '@/lib/time';
@@ -538,7 +539,21 @@ export function TimelineCanvas({ placed, lanes, onWindow }: { placed: Placed[]; 
       style={h ? { height: g.cross } : { width: g.cross, height: laneHead + axisLen }}
     >
       {laneHeader(g)}
-      <div className="relative" style={h ? { width: axisLen } : { height: axisLen }} onDoubleClick={(e) => onLaneDoubleClick(e, g.lane.key)}>
+      <div
+        className="relative"
+        style={h ? { width: axisLen } : { height: axisLen }}
+        onDoubleClick={(e) => onLaneDoubleClick(e, g.lane.key)}
+        // Items dragged in from a list or another pane land on that day, in this lane (WS-2).
+        onDragOver={(e) => dragKind(e) === 'items' && e.preventDefault()}
+        onDrop={async (e) => {
+          if (dragKind(e) !== 'items') return;
+          e.preventDefault();
+          const rect = e.currentTarget.getBoundingClientRect();
+          const day = dayAtPos(scale, h ? e.clientX - rect.left : e.clientY - rect.top);
+          const ids = readDragItems(e);
+          if (ids.length) toastWithUndo(await dateItemsWithUndo(ids, day, laneChange(laneMode, g.lane.key)));
+        }}
+      >
         {renderEntries(g)}
         {renderDensity(g)}
       </div>

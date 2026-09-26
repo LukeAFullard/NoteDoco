@@ -1,7 +1,7 @@
-import { lazy, useEffect } from 'react';
+import { lazy, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, PanelRight } from 'lucide-react';
 import { db } from '@/data/db';
 import { Pane } from '@/app/Pane';
 import { setCurrentGroup, useUi } from '@/app/ui';
@@ -9,9 +9,26 @@ import { EmptyState } from '@/design/EmptyState';
 import { StickyNote } from '@/features/stickies/StickyNote';
 import { openSticky } from '@/features/stickies/stickyDialog';
 import { ItemActionsMenu } from './ItemMenu';
+import { Inspector } from './Inspector';
+import { IconButton } from '@/design/Button';
+import { Dialog } from '@/design/Dialog';
+import { useLocalPref } from '@/lib/localPref';
 import { KIND_LABELS, itemTitle } from './kinds';
 
 const NoteEditor = lazy(() => import('@/features/notes/NoteEditor').then((m) => ({ default: m.NoteEditor })));
+
+/** Wide enough for the inspector beside the item (it opens as a sheet otherwise). */
+function useWide() {
+  const q = '(min-width: 1100px)';
+  const [wide, setWide] = useState(() => window.matchMedia(q).matches);
+  useEffect(() => {
+    const m = window.matchMedia(q);
+    const on = () => setWide(m.matches);
+    m.addEventListener('change', on);
+    return () => m.removeEventListener('change', on);
+  }, []);
+  return wide;
+}
 
 /** Opens any item by id: notes in the editor, stickies in their dialog. */
 export function ItemPage() {
@@ -19,6 +36,8 @@ export function ItemPage() {
   const item = useLiveQuery(() => db.items.get(itemId), [itemId]);
   const group = useLiveQuery(async () => (item?.groupId ? db.groups.get(item.groupId) : null), [item?.groupId]);
   const focusMode = useUi((s) => s.focusMode);
+  const [inspector, setInspector] = useLocalPref('inspector', false);
+  const wide = useWide();
 
   useEffect(() => {
     if (item) setCurrentGroup(item.groupId);
@@ -46,18 +65,44 @@ export function ItemPage() {
   );
 
   return (
-    <Pane title={focusMode ? '' : title} actions={!focusMode && <ItemActionsMenu items={[item]} />}>
-      {item.kind === 'note' ? (
-        <NoteEditor item={item} />
-      ) : item.kind === 'sticky' ? (
-        <div className="flex flex-col items-center gap-4 p-10">
-          <button type="button" onClick={() => openSticky(item.id)} aria-label="Edit sticky">
-            <StickyNote item={item} />
-          </button>
-          <p className="text-sm text-muted">Tap the sticky to edit it.</p>
+    <Pane
+      title={focusMode ? '' : title}
+      actions={
+        !focusMode && (
+          <span className="flex items-center gap-1">
+            <IconButton label={inspector ? 'Hide the inspector' : 'Show the inspector'} size="sm" aria-pressed={inspector} onPress={() => setInspector(!inspector)}>
+              <PanelRight size={16} />
+            </IconButton>
+            <ItemActionsMenu items={[item]} />
+          </span>
+        )
+      }
+    >
+      <div className="flex h-full min-h-0">
+        <div className="min-h-0 min-w-0 flex-1">
+          {item.kind === 'note' ? (
+            <NoteEditor item={item} />
+          ) : item.kind === 'sticky' ? (
+            <div className="flex flex-col items-center gap-4 p-10">
+              <button type="button" onClick={() => openSticky(item.id)} aria-label="Edit sticky">
+                <StickyNote item={item} />
+              </button>
+              <p className="text-sm text-muted">Tap the sticky to edit it.</p>
+            </div>
+          ) : (
+            <EmptyState title={`${KIND_LABELS[item.kind]}s arrive in a later phase`} body="This item was created by a newer version of NoteDoco." />
+          )}
         </div>
-      ) : (
-        <EmptyState title={`${KIND_LABELS[item.kind]}s arrive in a later phase`} body="This item was created by a newer version of NoteDoco." />
+        {inspector && !focusMode && wide && (
+          <aside className="w-80 shrink-0 overflow-y-auto border-l border-border bg-bg" aria-label="Inspector">
+            <Inspector item={item} />
+          </aside>
+        )}
+      </div>
+      {inspector && !wide && (
+        <Dialog isOpen onOpenChange={(o) => !o && setInspector(false)} title="Inspector">
+          <Inspector item={item} />
+        </Dialog>
       )}
     </Pane>
   );
