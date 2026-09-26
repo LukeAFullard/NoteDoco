@@ -1,9 +1,9 @@
 import { db } from './db';
 import { freshDb } from '@/test/db';
 import { createItem, setBodyText } from './repos/items';
-import { completeWithUndo, setTimeWithUndo, toggleChecklistLineWithUndo } from './actions';
+import { applySpanChange, completeWithUndo, rescheduleWithUndo, setTimeWithUndo, toggleChecklistLineWithUndo } from './actions';
 import { undo } from './undo';
-import { allDaySpan, todayLocal, addDays } from '@/lib/time';
+import { allDaySpan, timedSpan, todayLocal, addDays } from '@/lib/time';
 
 beforeEach(freshDb);
 
@@ -75,4 +75,27 @@ it('sets dates undoably', async () => {
   expect((await db.items.get(id))!.due!.start).toBe('2026-10-01');
   await undo();
   expect((await db.items.get(id))!.due).toBeNull();
+});
+
+it('reschedules by dragging, moving reminders and the group along, undoably', async () => {
+  const id = await createItem({ kind: 'sticky', text: 'x', when: allDaySpan('2026-10-01') });
+  await db.items.update(id, { reminders: [{ id: 'r', at: new Date(2026, 9, 1, 9).toISOString(), firedAt: null }] });
+  const item = (await db.items.get(id))!;
+  const label = await rescheduleWithUndo(item, 'when', item.when!, allDaySpan('2026-10-03'), { groupId: null });
+  expect(label).toMatch(/^Moved to /);
+  const moved = (await db.items.get(id))!;
+  expect(moved.when!.start).toBe('2026-10-03');
+  expect(new Date(moved.reminders[0]!.at).getDate()).toBe(3);
+  await undo();
+  expect((await db.items.get(id))!.when!.start).toBe('2026-10-01');
+});
+
+it('moves a whole repeat when one of its later occurrences is dragged', () => {
+  const stored = allDaySpan('2026-10-01');
+  expect(applySpanChange(stored, allDaySpan('2026-10-08'), allDaySpan('2026-10-09'))).toEqual(allDaySpan('2026-10-02'));
+  expect(applySpanChange(stored, allDaySpan('2026-10-08'), allDaySpan('2026-10-08', '2026-10-10'))).toEqual(allDaySpan('2026-10-01', '2026-10-03'));
+  const t = timedSpan(new Date(2026, 9, 1, 9), new Date(2026, 9, 1, 10));
+  const moved = applySpanChange(t, t, timedSpan(new Date(2026, 9, 1, 11), new Date(2026, 9, 1, 12)));
+  expect(new Date(moved.start).getHours()).toBe(11);
+  expect(new Date(moved.end!).getHours()).toBe(12);
 });

@@ -3,11 +3,11 @@ import { createItem, duplicateItem, moveItem, restoreItems, trashItems, updateIt
 import { moveGroup, restoreGroup, trashGroup, updateGroup } from './repos/groups';
 import { db } from './db';
 import { touched } from './meta';
-import type { Id, Item } from './types';
+import type { Id, Item, TimeSpan } from './types';
 import type { ColourKey } from '@/lib/palette';
 import { completeItem, getBodyText, reopenItem, toggleChecklistLine, type CompleteResult } from './repos/time';
 import { setBodyText } from './repos/items';
-import { formatDay } from '@/lib/time';
+import { addDays, allDaySpan, diffDays, formatDay, formatSpan, spanStart } from '@/lib/time';
 
 /**
  * User-facing actions: the repository call plus an undo entry. Each returns the toast message,
@@ -111,8 +111,8 @@ export async function moveGroupWithUndo(id: Id, parentId: Id | null, beforeId: I
 // ---------------------------------------------------------------------------------------------
 // Time (Phase 2): dates, done, repeats
 
-type TimeFields = Pick<Item, 'when' | 'due' | 'reminders' | 'recurrence' | 'task' | 'groupId'>;
-const timeFields = (i: Item): TimeFields => ({ when: i.when, due: i.due, reminders: i.reminders, recurrence: i.recurrence, task: i.task, groupId: i.groupId });
+type TimeFields = Pick<Item, 'when' | 'due' | 'reminders' | 'recurrence' | 'task' | 'groupId' | 'colour'>;
+const timeFields = (i: Item): TimeFields => ({ when: i.when, due: i.due, reminders: i.reminders, recurrence: i.recurrence, task: i.task, groupId: i.groupId, colour: i.colour });
 
 async function restoreFields(snapshot: [Id, TimeFields][]) {
   for (const [id, fields] of snapshot) {
@@ -176,4 +176,49 @@ export async function toggleChecklistLineWithUndo(itemId: Id, index: number, don
   const label = done ? 'Unticked' : 'Ticked';
   recordUndo({ label, undo: () => toggleChecklistLine(itemId, index), redo: () => toggleChecklistLine(itemId, index) });
   return label;
+}
+
+/**
+ * Applies the change from one span to another onto a stored span. For a repeat's later
+ * occurrence, `from` is that occurrence and `stored` the series' own date, so dragging any
+ * occurrence moves (or stretches) the whole series by the same amount.
+ */
+export function applySpanChange(stored: TimeSpan, from: TimeSpan, to: TimeSpan): TimeSpan {
+  if (stored.allDay && from.allDay && to.allDay) {
+    const startDays = diffDays(from.start, to.start);
+    const endDays = diffDays(from.end ?? from.start, to.end ?? to.start);
+    return allDaySpan(addDays(stored.start, startDays), addDays(stored.end ?? stored.start, endDays));
+  }
+  if (!stored.allDay && !from.allDay && !to.allDay) {
+    const startMs = Date.parse(to.start) - Date.parse(from.start);
+    const endMs = Date.parse(to.end ?? to.start) - Date.parse(from.end ?? from.start);
+    const start = new Date(Date.parse(stored.start) + startMs);
+    const end = new Date(Date.parse(stored.end ?? stored.start) + endMs);
+    return { ...stored, start: start.toISOString(), end: end > start ? end.toISOString() : null };
+  }
+  return to;
+}
+
+/**
+ * Moves or resizes an item on the timeline or calendar (TIME-6), optionally into another
+ * group or colour, keeping reminders the same distance from it. Undoable.
+ */
+export async function rescheduleWithUndo(
+  item: Item,
+  basis: 'when' | 'due' | 'created',
+  from: TimeSpan,
+  to: TimeSpan,
+  extra: Partial<Pick<Item, 'groupId' | 'colour'>> = {},
+): Promise<string> {
+  const field = basis === 'due' ? 'due' : 'when';
+  const stored = item[field];
+  const next = stored && basis !== 'created' ? applySpanChange(stored, from, to) : to;
+  const shiftMs = spanStart(next).getTime() - (stored ? spanStart(stored).getTime() : spanStart(next).getTime());
+  const reminders = item.reminders.map((r) => ({ ...r, at: new Date(Date.parse(r.at) + shiftMs).toISOString(), firedAt: null }));
+  let label = `Moved to ${formatSpan(to)}`;
+  if (extra.groupId !== undefined && extra.groupId !== item.groupId) {
+    label += ` in ${extra.groupId ? ((await db.groups.get(extra.groupId))?.name ?? 'a group') : 'Inbox'}`;
+  }
+  if (extra.colour !== undefined && extra.colour !== item.colour && extra.groupId === undefined) label += ', colour changed';
+  return setTimeWithUndo([item.id], { [field]: next, reminders, ...extra }, label);
 }
