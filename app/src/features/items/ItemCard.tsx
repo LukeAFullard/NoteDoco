@@ -114,11 +114,38 @@ export function ItemCard({ item, density, selected, selecting, onSelect, href }:
   );
 
   if (item.kind === 'sticky' && density === 'card') {
+    // The sticky itself takes clicks (its tilt makes an overlay link cover its checkboxes);
+    // keyboard and screen-reader users get a real link that becomes visible on focus.
     return (
-      <div className="group relative" data-item-id={item.id}>
-        <StickyNote item={item} selected={selected} interactive={!selecting} />
-        {link}
-        <div className="absolute top-1 right-1 z-10 flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
+      <div
+        className="group relative focus-within:rounded-[3px] focus-within:ring-2 focus-within:ring-focus"
+        data-item-id={item.id}
+        onClick={(e) => {
+          if (suppressClick.current) return void (suppressClick.current = false);
+          if (selecting || e.metaKey || e.ctrlKey || e.shiftKey) onSelect(item, e);
+          else openSticky(item.id);
+        }}
+        onPointerDown={onPointerDown}
+        onPointerUp={cancelLongPress}
+        onPointerLeave={cancelLongPress}
+        onPointerCancel={cancelLongPress}
+      >
+        <StickyNote item={item} selected={selected} interactive={!selecting} className="cursor-pointer" />
+        <Link
+          to={href}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            openSticky(item.id);
+          }}
+          className="sr-only"
+        >
+          {`Open sticky: ${itemTitle(item.title, item.kind)}`}
+        </Link>
+        <div
+          className="absolute top-1 right-1 z-10 flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100"
+          onClick={(e) => e.stopPropagation()}
+        >
           {checkbox}
           <ItemActionsMenu items={[item]} />
         </div>

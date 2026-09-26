@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router';
-import { Archive, Copy, ExternalLink, FolderInput, Inbox, MoreHorizontal, Palette, Pin, PinOff, Trash2 } from 'lucide-react';
+import { Archive, Combine, Copy, ExternalLink, FileText, FolderInput, Inbox, MoreHorizontal, Palette, Pin, PinOff, Trash2 } from 'lucide-react';
 import { Menu as AriaMenu, MenuTrigger, Popover, SubmenuTrigger } from 'react-aria-components';
 import type { Item } from '@/data/types';
 import { useGroups } from '@/data/hooks';
@@ -8,6 +8,7 @@ import { toastWithUndo } from '@/app/undoActions';
 import { IconButton } from '@/design/Button';
 import { MenuItem } from '@/design/Menu';
 import { COLOUR_KEYS, COLOUR_LABELS } from '@/lib/palette';
+import { mergeIntoNote, promoteToNote } from '@/features/stickies/promote';
 
 const popover = 'min-w-52 max-h-[60vh] overflow-auto rounded-panel border border-border bg-surface p-1 shadow-lg outline-none';
 
@@ -79,6 +80,16 @@ export function ItemActionsMenu({ items, onOpen, triggerLabel = 'Item actions' }
               }}
             >
               <Copy size={15} aria-hidden /> Duplicate
+            </MenuItem>
+          )}
+          {single?.kind === 'sticky' && (
+            <MenuItem onAction={async () => navigate(`/items/${await promoteToNote(single.id)}`)}>
+              <FileText size={15} aria-hidden /> Make it a note
+            </MenuItem>
+          )}
+          {items.length > 1 && items.every((i) => i.kind === 'sticky') && (
+            <MenuItem onAction={async () => navigate(`/items/${await mergeIntoNote(ids)}`)}>
+              <Combine size={15} aria-hidden /> Merge into one note
             </MenuItem>
           )}
           <MenuItem onAction={() => run(setArchivedWithUndo(ids, !items.every((i) => i.archived)))}>

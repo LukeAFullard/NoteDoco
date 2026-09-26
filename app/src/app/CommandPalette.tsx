@@ -1,11 +1,12 @@
 import { Command } from 'cmdk';
 import { useNavigate } from 'react-router';
-import { CalendarDays, FlaskConical, FolderPlus, Inbox, Moon, Palette, Redo2, Settings, Sun, Trash2, Undo2 } from 'lucide-react';
+import { CalendarDays, FilePlus, FlaskConical, FolderPlus, Inbox, Keyboard, Moon, Palette, Redo2, Settings, StickyNote, Sun, Trash2, Undo2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useGroups } from '@/data/hooks';
 import { openNewGroup, useUi } from './ui';
 import { setTheme, useTheme } from './theme';
 import { redoWithToast, undoWithToast } from './undoActions';
+import { useCreate } from '@/features/capture/useCreate';
 
 function Item({ onSelect, icon, children, keywords }: { onSelect: () => void; icon: ReactNode; children: ReactNode; keywords?: string[] }) {
   return (
@@ -28,6 +29,7 @@ export function CommandPalette() {
   const groups = useGroups() ?? [];
   const theme = useTheme((s) => s.theme);
   const navigate = useNavigate();
+  const create = useCreate();
   const close = () => useUi.setState({ paletteOpen: false });
   const run = (fn: () => void) => () => {
     close();
@@ -55,6 +57,9 @@ export function CommandPalette() {
           <Item icon={<Inbox size={16} />} onSelect={run(() => navigate('/inbox'))}>
             Inbox
           </Item>
+          <Item icon={<StickyNote size={16} />} onSelect={run(() => navigate('/stickies'))} keywords={['wall', 'post-it']}>
+            Stickies
+          </Item>
           {groups.map((g) => (
             <Item
               key={g.id}
@@ -79,8 +84,17 @@ export function CommandPalette() {
           </Item>
         </Command.Group>
         <Command.Group heading="Actions" className="text-xs text-muted [&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-1.5">
+          <Item icon={<FilePlus size={16} />} onSelect={run(() => void create.note())}>
+            New note
+          </Item>
+          <Item icon={<StickyNote size={16} />} onSelect={run(() => void create.sticky())}>
+            New sticky
+          </Item>
           <Item icon={<FolderPlus size={16} />} onSelect={run(() => openNewGroup())}>
             New group
+          </Item>
+          <Item icon={<Keyboard size={16} />} onSelect={run(() => useUi.setState({ shortcutsOpen: true }))}>
+            Keyboard shortcuts
           </Item>
           <Item icon={<Undo2 size={16} />} onSelect={run(() => void undoWithToast())}>
             Undo

@@ -9,6 +9,7 @@ const TrashPage = lazy(() => import('@/features/trash/TrashPage').then((m) => ({
 const SettingsPage = lazy(() => import('@/features/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })));
 const ItemPage = lazy(() => import('@/features/items/ItemPage').then((m) => ({ default: m.ItemPage })));
 const InboxPage = lazy(() => import('@/features/inbox/InboxPage').then((m) => ({ default: m.InboxPage })));
+const StickiesPage = lazy(() => import('@/features/stickies/StickiesPage').then((m) => ({ default: m.StickiesPage })));
 const DevGallery = lazy(() => import('@/features/dev/DevGallery').then((m) => ({ default: m.DevGallery })));
 const UpdatePrompt = lazy(() => import('./UpdatePrompt').then((m) => ({ default: m.UpdatePrompt })));
 const InkLab = lazy(() => import('@/lab/ink/InkLab').then((m) => ({ default: m.InkLab })));
@@ -22,6 +23,7 @@ const routes = [
       { index: true, element: <Navigate to="/today" replace /> },
       { path: 'today', element: <TodayPage /> },
       { path: 'inbox', element: <InboxPage /> },
+      { path: 'stickies', element: <StickiesPage /> },
       { path: 'groups/:groupId', element: <GroupPage /> },
       { path: 'items/:itemId', element: <ItemPage /> },
       { path: 'trash', element: <TrashPage /> },

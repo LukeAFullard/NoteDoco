@@ -80,6 +80,7 @@ test.describe('stickies and bulk actions', () => {
       await page.keyboard.press('s');
       await page.getByRole('textbox', { name: 'Sticky text' }).fill(t);
       await page.getByRole('button', { name: 'Done' }).click();
+      await expect(page.getByRole('dialog')).toHaveCount(0);
     }
     await expect(page.locator('[data-item-id]')).toHaveCount(3);
     await page.getByRole('checkbox', { name: 'Select one' }).check({ force: true });
