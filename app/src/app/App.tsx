@@ -11,6 +11,7 @@ const ItemPage = lazy(() => import('@/features/items/ItemPage').then((m) => ({ d
 const InboxPage = lazy(() => import('@/features/inbox/InboxPage').then((m) => ({ default: m.InboxPage })));
 const StickiesPage = lazy(() => import('@/features/stickies/StickiesPage').then((m) => ({ default: m.StickiesPage })));
 const TagsPage = lazy(() => import('@/features/tags/TagsPage').then((m) => ({ default: m.TagsPage })));
+const SearchPage = lazy(() => import('@/features/search/SearchPage').then((m) => ({ default: m.SearchPage })));
 const DevGallery = lazy(() => import('@/features/dev/DevGallery').then((m) => ({ default: m.DevGallery })));
 const UpdatePrompt = lazy(() => import('./UpdatePrompt').then((m) => ({ default: m.UpdatePrompt })));
 const InkLab = lazy(() => import('@/lab/ink/InkLab').then((m) => ({ default: m.InkLab })));
@@ -27,6 +28,7 @@ const routes = [
       { path: 'stickies', element: <StickiesPage /> },
       { path: 'groups/:groupId', element: <GroupPage /> },
       { path: 'items/:itemId', element: <ItemPage /> },
+      { path: 'search', element: <SearchPage /> },
       { path: 'tags', element: <TagsPage /> },
       { path: 'tags/:tag', element: <TagsPage /> },
       { path: 'trash', element: <TrashPage /> },

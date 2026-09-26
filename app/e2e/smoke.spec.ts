@@ -35,7 +35,7 @@ test('command palette opens with Ctrl+K and switches theme', async ({ page, isMo
   await page.goto('/');
   await expect(page.locator('html')).toHaveClass(/dark/);
   await page.keyboard.press('Control+k');
-  await page.getByPlaceholder('Type a command or search…').fill('light');
+  await page.getByPlaceholder('Search notes, or type a command…').fill('light');
   await page.keyboard.press('Enter');
   await expect(page.locator('html')).not.toHaveClass(/dark/);
   await page.reload();
