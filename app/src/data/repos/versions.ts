@@ -14,7 +14,7 @@ export interface VersionContent {
 export const MAX_VERSIONS_PER_ITEM = 150;
 export const SNAPSHOT_INTERVAL_MS = 5 * 60_000;
 
-const encode = (c: VersionContent) => zlibSync(strToU8(JSON.stringify(c)), { level: 6 });
+export const encodeVersion = (c: VersionContent) => zlibSync(strToU8(JSON.stringify(c)), { level: 6 });
 export const decodeVersion = (v: Version): VersionContent => JSON.parse(strFromU8(unzlibSync(v.snapshot))) as VersionContent;
 
 export async function listVersions(itemId: Id): Promise<Version[]> {
@@ -34,7 +34,7 @@ export async function snapshotNote(itemId: Id, reason: Version['reason'], minAge
     const prev = decodeVersion(latest);
     if (prev.text === body.text && prev.format === body.format) return false;
   }
-  await db.versions.add({ id: newId(), itemId, createdAt: now.toISOString(), reason, snapshot: encode({ title: item.title, format: body.format, text: body.text }) });
+  await db.versions.add({ id: newId(), itemId, createdAt: now.toISOString(), reason, snapshot: encodeVersion({ title: item.title, format: body.format, text: body.text }) });
   await prune(itemId);
   return true;
 }

@@ -6,6 +6,10 @@ import { Button } from '@/design/Button';
 import { setTheme, useTheme, type Theme } from '@/app/theme';
 import { formatBytes, getStorageStatus, requestPersistence, type StorageStatus } from '@/app/durability';
 import { useStorageHealth } from '@/data/health';
+import { setPrefs, usePrefs, type Prefs } from '@/app/prefs';
+import { Switch } from '@/design/Switch';
+import { useUi } from '@/app/ui';
+import { DataSection } from './DataSection';
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -21,6 +25,26 @@ const THEMES: Array<{ value: Theme; label: string }> = [
   { value: 'light', label: 'Light' },
   { value: 'system', label: 'Match system' },
 ];
+
+function Choice<K extends keyof Prefs>({ label, prefKey, options }: { label: string; prefKey: K; options: Array<{ value: Prefs[K]; label: string }> }) {
+  const value = usePrefs((p) => p[prefKey]);
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <span className="w-28 shrink-0 text-sm">{label}</span>
+      <RadioGroup value={String(value)} onChange={(v) => setPrefs({ [prefKey]: options.find((o) => String(o.value) === v)!.value } as Partial<Prefs>)} aria-label={label} orientation="horizontal" className="flex flex-wrap gap-2">
+        {options.map((o) => (
+          <Radio
+            key={String(o.value)}
+            value={String(o.value)}
+            className="cursor-pointer rounded-panel border border-border px-3 py-1.5 text-sm outline-none data-[focus-visible]:ring-2 data-[focus-visible]:ring-focus data-[selected]:border-accent data-[selected]:bg-accent-soft data-[selected]:font-medium"
+          >
+            {o.label}
+          </Radio>
+        ))}
+      </RadioGroup>
+    </div>
+  );
+}
 
 function StorageSection() {
   const [status, setStatus] = useState<StorageStatus | null>(null);
@@ -71,7 +95,6 @@ function StorageSection() {
         ) : (
           <p className="text-muted">This browser doesn’t report storage details.</p>
         )}
-        <p className="text-muted">Backup, restore and export arrive in Phase 1.</p>
       </div>
     </Section>
   );
@@ -79,6 +102,7 @@ function StorageSection() {
 
 export function SettingsPage() {
   const theme = useTheme((s) => s.theme);
+  const tidy = usePrefs((p) => p.tidyStickies);
   return (
     <Pane title="Settings">
       <Section title="Appearance">
@@ -93,8 +117,27 @@ export function SettingsPage() {
             </Radio>
           ))}
         </RadioGroup>
+        <div className="mt-4 space-y-3">
+          <Choice label="Text size" prefKey="textSize" options={[{ value: 'small', label: 'Small' }, { value: 'medium', label: 'Medium' }, { value: 'large', label: 'Large' }]} />
+          <Choice label="Spacing" prefKey="density" options={[{ value: 'comfortable', label: 'Comfortable' }, { value: 'compact', label: 'Compact' }]} />
+          <Choice label="Sticky font" prefKey="stickyFont" options={[{ value: 'sans', label: 'Clean' }, { value: 'hand', label: 'Handwritten' }, { value: 'serif', label: 'Serif' }]} />
+          <Switch isSelected={!tidy} onChange={(v) => setPrefs({ tidyStickies: !v })}>
+            Stickies sit at a slight angle, like paper
+          </Switch>
+        </div>
+      </Section>
+      <Section title="Dates">
+        <Choice label="Week starts on" prefKey="weekStart" options={[{ value: 'auto', label: 'Automatic' }, { value: 'monday', label: 'Monday' }, { value: 'sunday', label: 'Sunday' }]} />
+      </Section>
+      <Section title="Backup & import">
+        <DataSection />
       </Section>
       <StorageSection />
+      <Section title="Keyboard">
+        <button type="button" className="text-sm text-accent underline" onClick={() => useUi.setState({ shortcutsOpen: true })}>
+          Show keyboard shortcuts (press ? anywhere)
+        </button>
+      </Section>
       <Section title="About">
         <div className="space-y-2 text-sm">
           <p>

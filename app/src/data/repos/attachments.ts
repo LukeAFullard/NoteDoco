@@ -1,13 +1,14 @@
 import { db } from '../db';
 import { newId, nowIso } from '@/lib/ids';
 import type { Attachment, Id } from '../types';
+import { blobBytes } from '@/lib/blob';
 
 /** Markdown URL scheme for stored attachments: ![photo](ndoco:attachment/<id>). */
 export const ATTACHMENT_SCHEME = 'ndoco:attachment/';
 
 async function sha256(blob: Blob): Promise<string> {
   try {
-    const hash = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
+    const hash = await crypto.subtle.digest('SHA-256', (await blobBytes(blob)) as BufferSource);
     return [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, '0')).join('');
   } catch {
     return ''; // subtle crypto is unavailable outside secure contexts; the hash is only for de-duplication

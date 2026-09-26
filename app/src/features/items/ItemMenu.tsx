@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router';
-import { Archive, Combine, Copy, ExternalLink, FileText, FolderInput, Inbox, MoreHorizontal, Palette, Pin, PinOff, Trash2 } from 'lucide-react';
+import { Archive, Combine, Copy, Download, ExternalLink, FileText, FolderInput, Inbox, MoreHorizontal, Palette, Pin, PinOff, Trash2 } from 'lucide-react';
 import { Menu as AriaMenu, MenuTrigger, Popover, SubmenuTrigger } from 'react-aria-components';
 import type { Item } from '@/data/types';
 import { useGroups } from '@/data/hooks';
@@ -80,6 +80,17 @@ export function ItemActionsMenu({ items, onOpen, triggerLabel = 'Item actions' }
               }}
             >
               <Copy size={15} aria-hidden /> Duplicate
+            </MenuItem>
+          )}
+          {single?.kind === 'note' && (
+            <MenuItem
+              onAction={async () => {
+                const [{ exportNote }, { download }] = await Promise.all([import('@/backup/markdown'), import('@/backup/backup')]);
+                const out = await exportNote(single.id);
+                download(out.blob, out.name);
+              }}
+            >
+              <Download size={15} aria-hidden /> Export as {'Markdown'}
             </MenuItem>
           )}
           {single?.kind === 'sticky' && (

@@ -16,6 +16,7 @@ import { useGlobalShortcuts } from './shortcuts';
 const CommandPalette = lazy(() => import('./CommandPalette').then((m) => ({ default: m.CommandPalette })));
 const NewGroupDialog = lazy(() => import('./NewGroupDialog').then((m) => ({ default: m.NewGroupDialog })));
 const ShortcutsDialog = lazy(() => import('./ShortcutsDialog').then((m) => ({ default: m.ShortcutsDialog })));
+const BackupReminder = lazy(() => import('./BackupReminder').then((m) => ({ default: m.BackupReminder })));
 const StickyDialog = lazy(() => import('@/features/stickies/StickyDialog').then((m) => ({ default: m.StickyDialog })));
 const StickyDock = lazy(() => import('@/features/stickies/StickyDock').then((m) => ({ default: m.StickyDock })));
 
@@ -55,6 +56,9 @@ export function Shell() {
     <div className="flex h-full flex-col">
       <StorageBanner />
       <InstallGuide />
+      <Suspense>
+        <BackupReminder />
+      </Suspense>
       <div className="flex min-h-0 flex-1">
         {!focusMode && (
           <div className="hidden md:block">
