@@ -9,6 +9,7 @@ import { toggleChecklistItem } from '@/lib/textInfo';
 import { COLOUR_LABELS } from '@/lib/palette';
 import { usePrefs } from '@/app/prefs';
 import { STICKY_SIZES, tiltFor } from './stickyStyle';
+import { DateBadge, DoneToggle, MentionText } from '@/features/time/DateBadge';
 
 const CHECK = /^\s*[-*+]\s+\[( |x|X)\]\s+(.*)$/;
 
@@ -40,7 +41,9 @@ export function StickyText({ itemId, text, interactive = true }: { itemId: strin
               }}
               className="mt-1 h-3.5 w-3.5 shrink-0 accent-[var(--sticky-ink)]"
             />
-            <span className={cn(done && 'line-through opacity-60')}>{m[2]}</span>
+            <span className={cn(done && 'line-through opacity-60')}>
+              <MentionText text={m[2]!} />
+            </span>
           </label>
         );
       })}
@@ -78,9 +81,16 @@ export function StickyNote({
       aria-label={`${COLOUR_LABELS[colour]} sticky: ${item.title || 'empty'}`}
     >
       {item.pinned && <Pin size={13} className="absolute top-1.5 right-1.5 opacity-60" aria-label="Pinned" />}
-      {item.task?.done && <Check size={14} className="absolute top-1.5 left-1.5 opacity-60" aria-label="Done" />}
-      {body ? <StickyText key={body.text} itemId={item.id} text={body.text} interactive={interactive} /> : null}
+      {item.task && (
+        <div className="mb-1.5 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+          {interactive ? <DoneToggle item={item} className="border-sticky-ink/60" /> : item.task.done && <Check size={14} aria-label="Done" />}
+        </div>
+      )}
+      <div className={cn(item.task?.done && 'line-through opacity-60')}>
+        {body ? <StickyText key={body.text} itemId={item.id} text={body.text} interactive={interactive} /> : null}
+      </div>
       {body && !body.text && <span className="opacity-50">Empty sticky</span>}
+      {(item.when || item.due) && <DateBadge item={item} className="mt-auto pt-2 !text-sticky-ink/80 text-xs" />}
     </div>
   );
 }

@@ -285,6 +285,17 @@
     background: rgb(217 165 74 / 0.35);
     border-radius: 2px;
   }
+  .note-content .date-chip {
+    background: var(--color-accent-soft);
+    color: var(--color-accent);
+    border-radius: 4px;
+    padding: 0 3px;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .note-content .date-chip-past {
+    opacity: 0.75;
+  }
   .note-content .search-match.current {
     background: var(--color-accent-fill);
     color: var(--color-on-accent);

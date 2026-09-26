@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
 import type { Editor } from '@tiptap/core';
-import { Code2, History, Maximize2, Minimize2, Search, Type } from 'lucide-react';
+import { CalendarClock, Code2, History, Maximize2, Minimize2, Search, Type } from 'lucide-react';
 import { db } from '@/data/db';
 import { setBodyText } from '@/data/repos/items';
 import { addAttachment, attachmentIdFromUrl, objectUrlFor } from '@/data/repos/attachments';
@@ -11,7 +11,9 @@ import { Menu, MenuItem } from '@/design/Menu';
 import { cn } from '@/design/cn';
 import { useDebouncedSave } from '@/lib/useDebouncedSave';
 import { useKeyboardInset } from '@/lib/useKeyboardInset';
-import { useUi } from '@/app/ui';
+import { openDateDialog, useUi } from '@/app/ui';
+import { resolveDateMentions } from '@/lib/dateMentions';
+import { DateBadge, DoneToggle } from '@/features/time/DateBadge';
 import { noteExtensions } from './editor/extensions';
 import { Toolbar } from './editor/Toolbar';
 import { FindBar } from './editor/FindBar';
@@ -128,8 +130,15 @@ function PlainEditor({ text, onChange, mono, label }: { text: string; onChange: 
         autoFocus={!text}
         spellCheck
         onChange={(e) => {
-          setValue(e.target.value);
-          onChange(e.target.value);
+          // "@fri " becomes "@2026-10-02 " as you type; keep the caret where it was.
+          const el = e.target;
+          const next = resolveDateMentions(el.value);
+          if (next !== el.value) {
+            const caret = el.selectionStart + (next.length - el.value.length);
+            requestAnimationFrame(() => el.setSelectionRange(caret, caret));
+          }
+          setValue(next);
+          onChange(next);
         }}
         placeholder="Write here. The first line becomes the title."
         className={cn(
@@ -255,8 +264,19 @@ export function NoteEditor({ item }: { item: Item }) {
         </IconButton>
       </div>
       {!focusMode && (
-        <div className="border-b border-border px-4 py-1.5">
-          <TagEditor item={item} />
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-border px-4 py-1.5">
+          <DoneToggle item={item} />
+          <button
+            type="button"
+            onClick={() => openDateDialog([item.id])}
+            className="flex items-center gap-1.5 rounded text-sm text-muted outline-none hover:text-text focus-visible:ring-2 focus-visible:ring-focus"
+          >
+            <CalendarClock size={15} aria-hidden />
+            {item.when || item.due ? <DateBadge item={item} /> : <span>Add date</span>}
+          </button>
+          <div className="min-w-0 flex-1">
+            <TagEditor item={item} />
+          </div>
         </div>
       )}
       {plain ? (

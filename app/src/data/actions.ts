@@ -5,6 +5,9 @@ import { db } from './db';
 import { touched } from './meta';
 import type { Id, Item } from './types';
 import type { ColourKey } from '@/lib/palette';
+import { completeItem, getBodyText, reopenItem, toggleChecklistLine, type CompleteResult } from './repos/time';
+import { setBodyText } from './repos/items';
+import { formatDay } from '@/lib/time';
 
 /**
  * User-facing actions: the repository call plus an undo entry. Each returns the toast message,
@@ -102,5 +105,75 @@ export async function moveGroupWithUndo(id: Id, parentId: Id | null, beforeId: I
     },
     redo: () => moveGroup(id, parentId, beforeId),
   });
+  return label;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Time (Phase 2): dates, done, repeats
+
+type TimeFields = Pick<Item, 'when' | 'due' | 'reminders' | 'recurrence' | 'task' | 'groupId'>;
+const timeFields = (i: Item): TimeFields => ({ when: i.when, due: i.due, reminders: i.reminders, recurrence: i.recurrence, task: i.task, groupId: i.groupId });
+
+async function restoreFields(snapshot: [Id, TimeFields][]) {
+  for (const [id, fields] of snapshot) {
+    const now = await db.items.get(id);
+    if (now) await db.items.put(touched(now, fields));
+  }
+}
+
+/** Sets dates, reminders, repeats, the to-do checkbox or the group on items, undoably. */
+export async function setTimeWithUndo(ids: Id[], patch: Partial<TimeFields>, label = 'Date changed'): Promise<string> {
+  const before = (await db.items.bulkGet(ids)).filter((i): i is Item => !!i).map((i) => [i.id, timeFields(i)] as [Id, TimeFields]);
+  for (const id of ids) await updateItem(id, patch);
+  recordUndo({
+    label,
+    undo: () => restoreFields(before),
+    redo: async () => {
+      for (const id of ids) await updateItem(id, patch);
+    },
+  });
+  return label;
+}
+
+/**
+ * Marks an item done (or, for a repeat, moves it to its next date). Undo puts back its dates,
+ * checkbox and checklist, and trashes a template's fresh copy.
+ */
+export async function completeWithUndo(id: Id): Promise<{ label: string; result: CompleteResult }> {
+  const item = await db.items.get(id);
+  if (!item) throw new Error(`Item ${id} not found`);
+  const text = await getBodyText(id);
+  const result = await completeItem(id);
+  const label =
+    result.kind === 'done' ? 'Done'
+    : result.kind === 'next' ? `Done. Next: ${formatDay(result.next)}`
+    : 'Started a fresh copy';
+  recordUndo({
+    label,
+    undo: async () => {
+      await restoreFields([[id, timeFields(item)]]);
+      if (text !== null && (await getBodyText(id)) !== text) await setBodyText(id, text);
+      if (result.kind === 'copied') await trashItems([result.copyId]);
+    },
+    redo: async () => void (await completeItem(id)),
+  });
+  return { label, result };
+}
+
+/** Ticks or unticks an item's own checkbox. Ticking a repeating item moves it on instead. */
+export async function toggleDoneWithUndo(id: Id): Promise<string> {
+  const item = await db.items.get(id);
+  if (!item) throw new Error(`Item ${id} not found`);
+  if (!item.task?.done) return (await completeWithUndo(id)).label;
+  await reopenItem(id);
+  recordUndo({ label: 'Not done', undo: () => restoreFields([[id, timeFields(item)]]), redo: () => reopenItem(id) });
+  return 'Not done';
+}
+
+/** Ticks or unticks one checklist line inside a note or sticky. */
+export async function toggleChecklistLineWithUndo(itemId: Id, index: number, done: boolean): Promise<string> {
+  await toggleChecklistLine(itemId, index);
+  const label = done ? 'Unticked' : 'Ticked';
+  recordUndo({ label, undo: () => toggleChecklistLine(itemId, index), redo: () => toggleChecklistLine(itemId, index) });
   return label;
 }

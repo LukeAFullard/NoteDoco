@@ -1,10 +1,11 @@
 import { db } from '../db';
 import { freshMeta, touched } from '../meta';
-import type { Id, Item, ItemKind, NoteBody, StickyBody } from '../types';
+import type { Id, Item, ItemKind, NoteBody, StickyBody, TimeSpan } from '../types';
 import { compareOrder, orderBetween } from '@/lib/order';
 import { nowIso } from '@/lib/ids';
 import type { ColourKey } from '@/lib/palette';
 import { analyseText } from '@/lib/textInfo';
+import { taskRefsFor } from '../taskRefs';
 
 export const TRASH_RETENTION_DAYS = 30;
 
@@ -16,6 +17,10 @@ export interface NewItem {
   text?: string;
   format?: NoteBody['format'];
   size?: StickyBody['size'];
+  when?: TimeSpan | null;
+  due?: TimeSpan | null;
+  /** Make it a to-do (a checkbox on the item itself). */
+  task?: boolean;
 }
 
 function blankItem(kind: ItemKind, groupId: Id | null, order: string): Item {
@@ -57,6 +62,12 @@ export async function listTrash(): Promise<Item[]> {
 /** Merges tags from the tag picker with #tags found in the text. */
 export const mergeTags = (manual: string[], inline: string[]): string[] => [...new Set([...manual, ...inline])].sort();
 
+async function syncTaskRefs(itemId: Id, text: string) {
+  await db.taskRefs.where('itemId').equals(itemId).delete();
+  const refs = taskRefsFor(itemId, text);
+  if (refs.length) await db.taskRefs.bulkAdd(refs);
+}
+
 /** Fields derived from a body, so lists never parse bodies. */
 function derivedFields(item: Item, text: string, format: NoteBody['format']): Partial<Item> {
   const info = analyseText(text, format);
@@ -76,9 +87,13 @@ export async function createItem(input: NewItem): Promise<Id> {
   Object.assign(item, derivedFields(item, text, input.format ?? 'markdown'));
   if (input.title !== undefined) item.title = input.title;
   item.colour = input.colour ?? null;
+  item.when = input.when ?? null;
+  item.due = input.due ?? null;
+  if (input.task) item.task = { done: false, doneAt: null };
 
-  await db.transaction('rw', db.items, db.noteBodies, db.stickyBodies, async () => {
+  await db.transaction('rw', db.items, db.noteBodies, db.stickyBodies, db.taskRefs, async () => {
     await db.items.add(item);
+    await syncTaskRefs(item.id, text);
     if (input.kind === 'note') {
       await db.noteBodies.add({ itemId: item.id, format: input.format ?? 'markdown', text });
     } else if (input.kind === 'sticky') {
@@ -98,7 +113,7 @@ export async function updateItem(id: Id, patch: Partial<Omit<Item, keyof import(
 
 /** Saves a note or sticky body and refreshes the derived title/preview/stats/tags. */
 export async function setBodyText(id: Id, text: string, format?: NoteBody['format']) {
-  await db.transaction('rw', db.items, db.noteBodies, db.stickyBodies, async () => {
+  await db.transaction('rw', db.items, db.noteBodies, db.stickyBodies, db.taskRefs, async () => {
     const it = await db.items.get(id);
     if (!it) throw new Error(`Item ${id} not found`);
     let fmt: NoteBody['format'] = 'markdown';
@@ -110,6 +125,7 @@ export async function setBodyText(id: Id, text: string, format?: NoteBody['forma
       await db.stickyBodies.update(id, { text });
     } else throw new Error(`Item kind ${it.kind} has no text body`);
     await db.items.put(touched(it, derivedFields(it, text, fmt)));
+    await syncTaskRefs(id, text);
   });
 }
 
@@ -143,7 +159,7 @@ export async function duplicateItem(id: Id): Promise<Id> {
     const sibs = await listItems(it.groupId);
     const next = sibs[sibs.findIndex((s) => s.id === id) + 1];
     const order = next && next.id !== copyId ? orderBetween(it.order, next.order) : copy.order;
-    await db.items.put({ ...copy, order, manualTags: it.manualTags, tags: it.tags });
+    await db.items.put({ ...copy, order, manualTags: it.manualTags, tags: it.tags, when: it.when, due: it.due, task: it.task && { done: false, doneAt: null } });
   });
   return copyId;
 }
@@ -224,7 +240,7 @@ export async function discardIfEmpty(id: Id): Promise<boolean> {
     const it = await db.items.get(id);
     if (!it) return false;
     const text = it.kind === 'note' ? (await db.noteBodies.get(id))?.text : (await db.stickyBodies.get(id))?.text;
-    if ((text ?? '').trim() || it.manualTags.length) return false;
+    if ((text ?? '').trim() || it.manualTags.length || it.when || it.due) return false;
     await db.items.delete(id);
     await db.noteBodies.delete(id);
     await db.stickyBodies.delete(id);

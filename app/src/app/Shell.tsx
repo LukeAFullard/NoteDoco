@@ -18,6 +18,7 @@ const NewGroupDialog = lazy(() => import('./NewGroupDialog').then((m) => ({ defa
 const ShortcutsDialog = lazy(() => import('./ShortcutsDialog').then((m) => ({ default: m.ShortcutsDialog })));
 const BackupReminder = lazy(() => import('./BackupReminder').then((m) => ({ default: m.BackupReminder })));
 const StickyDialog = lazy(() => import('@/features/stickies/StickyDialog').then((m) => ({ default: m.StickyDialog })));
+const DateDialog = lazy(() => import('@/features/time/DateDialog').then((m) => ({ default: m.DateDialog })));
 const StickyDock = lazy(() => import('@/features/stickies/StickyDock').then((m) => ({ default: m.StickyDock })));
 
 function BottomTab({ to, onPress, icon, label }: { to?: string; onPress?: () => void; icon: ReactNode; label: string }) {
@@ -51,6 +52,7 @@ export function Shell() {
   const stickyOpen = useStickyDialog((s) => s.id !== null);
   const paletteOpen = useUi((s) => s.paletteOpen);
   const newGroupOpen = useUi((s) => s.newGroupOpen);
+  const dateDialogOpen = useUi((s) => s.dateDialogIds !== null);
 
   return (
     <div className="flex h-full flex-col">
@@ -103,6 +105,7 @@ export function Shell() {
         {shortcutsOpen && <ShortcutsDialog />}
         {!focusMode && <StickyDock />}
         {stickyOpen && <StickyDialog />}
+        {dateDialogOpen && <DateDialog />}
       </Suspense>
       <Toaster />
     </div>

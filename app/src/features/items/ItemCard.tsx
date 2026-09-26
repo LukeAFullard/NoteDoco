@@ -11,6 +11,7 @@ import { ItemActionsMenu } from './ItemMenu';
 import { openSticky } from '@/features/stickies/stickyDialog';
 import { canDrag, setDragItems } from '@/lib/dnd';
 import { useSelection } from './selection';
+import { DateBadge, DoneToggle } from '@/features/time/DateBadge';
 
 export type Density = 'row' | 'card';
 
@@ -168,7 +169,8 @@ export function ItemCard({ item, density, selected, selecting, onSelect, href }:
 
   const meta = (
     <span className="flex min-w-0 items-center gap-3 text-xs text-muted">
-      <span className="shrink-0 font-mono">{formatRelative(item.updatedAt)}</span>
+      <DateBadge item={item} />
+      {!item.when && !item.due && <span className="shrink-0 font-mono">{formatRelative(item.updatedAt)}</span>}
       <ChecklistProgress item={item} />
       <Tags tags={item.tags} />
     </span>
@@ -182,6 +184,7 @@ export function ItemCard({ item, density, selected, selecting, onSelect, href }:
         className={cn('group relative flex items-center gap-3 rounded-panel px-3 py-2.5 hover:bg-surface-2/60', selected && 'bg-accent-soft')}
       >
         {checkbox}
+        <DoneToggle item={item} />
         {item.kind === 'sticky' ? (
           <span className="h-4 w-4 shrink-0 rounded-[2px] border border-black/10" style={{ background: `var(--sticky-${item.colour ?? 'lemon'})` }} aria-hidden />
         ) : (
@@ -189,12 +192,13 @@ export function ItemCard({ item, density, selected, selecting, onSelect, href }:
         )}
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-1.5">
-            <span className={cn('truncate font-medium', !item.title && 'text-muted')}>{itemTitle(item.title, item.kind)}</span>
+            <span className={cn('truncate font-medium', !item.title && 'text-muted', item.task?.done && 'text-muted line-through')}>{itemTitle(item.title, item.kind)}</span>
             {item.pinned && <Pin size={12} className="shrink-0 text-accent" aria-label="Pinned" />}
           </span>
           {item.preview && <span className="block truncate text-sm text-muted">{item.preview}</span>}
         </span>
         <span className="hidden sm:block">{meta}</span>
+        {(item.when || item.due) && <DateBadge item={item} className="text-xs sm:hidden" />}
         {link}
         <span className="relative z-10 opacity-0 group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
           <ItemActionsMenu items={[item]} />
@@ -215,8 +219,9 @@ export function ItemCard({ item, density, selected, selecting, onSelect, href }:
       {item.colour && <span className="absolute inset-x-0 top-0 h-1 rounded-t-panel" style={{ background: `var(--sticky-${item.colour})` }} />}
       <div className="flex items-center gap-2">
         {checkbox}
+        <DoneToggle item={item} />
         <Icon size={15} className="shrink-0 text-muted" aria-hidden />
-        <span className={cn('min-w-0 flex-1 truncate font-medium', !item.title && 'text-muted')}>{itemTitle(item.title, item.kind)}</span>
+        <span className={cn('min-w-0 flex-1 truncate font-medium', !item.title && 'text-muted', item.task?.done && 'text-muted line-through')}>{itemTitle(item.title, item.kind)}</span>
         {item.pinned && <Pin size={12} className="shrink-0 text-accent" aria-label="Pinned" />}
       </div>
       <p className="line-clamp-4 flex-1 text-sm text-muted">{item.preview}</p>

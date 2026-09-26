@@ -1,9 +1,16 @@
 import { useNavigate } from 'react-router';
-import { Archive, Combine, Copy, Download, ExternalLink, FileText, FolderInput, Inbox, MoreHorizontal, Palette, Pin, PinOff, Trash2 } from 'lucide-react';
+import {
+  Archive, CalendarClock, CheckCircle2, Circle, Combine, Copy, Download, ExternalLink, FileText, FolderInput, Inbox, ListTodo, MoreHorizontal, Palette, Pin, PinOff, Trash2,
+} from 'lucide-react';
 import { Menu as AriaMenu, MenuTrigger, Popover, SubmenuTrigger } from 'react-aria-components';
 import type { Item } from '@/data/types';
 import { useGroups } from '@/data/hooks';
-import { duplicateWithUndo, moveItemsWithUndo, setArchivedWithUndo, setColourWithUndo, setPinnedWithUndo, trashItemsWithUndo } from '@/data/actions';
+import {
+  completeWithUndo, duplicateWithUndo, moveItemsWithUndo, setArchivedWithUndo, setColourWithUndo, setPinnedWithUndo, setTimeWithUndo, toggleDoneWithUndo, trashItemsWithUndo,
+} from '@/data/actions';
+import { openDateDialog } from '@/app/ui';
+import { parseRule } from '@/lib/recurrence';
+import { openSticky } from '@/features/stickies/stickyDialog';
 import { toastWithUndo } from '@/app/undoActions';
 import { IconButton } from '@/design/Button';
 import { MenuItem } from '@/design/Menu';
@@ -32,6 +39,33 @@ export function ItemActionsMenu({ items, onOpen, triggerLabel = 'Item actions' }
             <MenuItem onAction={onOpen}>
               <ExternalLink size={15} aria-hidden /> Open
             </MenuItem>
+          )}
+          <MenuItem onAction={() => openDateDialog(ids)}>
+            <CalendarClock size={15} aria-hidden /> Date and repeat…
+          </MenuItem>
+          {single && parseRule(single.recurrence)?.mode === 'copy' && (single.when || single.due) ? (
+            <MenuItem
+              onAction={async () => {
+                const { label, result } = await completeWithUndo(single.id);
+                toastWithUndo(label);
+                if (result.kind === 'copied') {
+                  if (single.kind === 'sticky') openSticky(result.copyId);
+                  else navigate(`/items/${result.copyId}`);
+                }
+              }}
+            >
+              <CheckCircle2 size={15} aria-hidden /> Start a fresh copy
+            </MenuItem>
+          ) : single?.task ? (
+            <MenuItem onAction={() => run(toggleDoneWithUndo(single.id))}>
+              {single.task.done ? <Circle size={15} aria-hidden /> : <CheckCircle2 size={15} aria-hidden />} {single.task.done ? 'Mark not done' : 'Mark done'}
+            </MenuItem>
+          ) : (
+            items.some((i) => !i.task) && (
+              <MenuItem onAction={() => run(setTimeWithUndo(ids.filter((id) => !items.find((i) => i.id === id)!.task), { task: { done: false, doneAt: null } }, items.length > 1 ? 'Now to-dos' : 'Now a to-do'))}>
+                <ListTodo size={15} aria-hidden /> Make {items.length > 1 ? 'them to-dos' : 'it a to-do'}
+              </MenuItem>
+            )
           )}
           <MenuItem onAction={() => run(setPinnedWithUndo(ids, !allPinned))}>
             {allPinned ? <PinOff size={15} aria-hidden /> : <Pin size={15} aria-hidden />} {allPinned ? 'Unpin' : 'Pin'}
