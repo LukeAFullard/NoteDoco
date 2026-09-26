@@ -14,10 +14,10 @@
 
 | Concern | Choice | Why | Considered |
 |---|---|---|---|
-| Build and UI | Vite, React 19, TypeScript (strict) | Keep what works; the richest ecosystem for editors and canvases | Svelte/Solid: smaller, but not worth a switch |
+| Build and UI | Vite 8, React 19, TypeScript 7 (strict) | Keep what works; the richest ecosystem for editors and canvases | Svelte/Solid: smaller, but not worth a switch |
 | Styling | Tailwind CSS v4 + CSS custom properties for design tokens | Tokens make theming (light/dark, sticky palette) one place | CSS Modules |
 | Accessible UI primitives | React Aria Components | Strong accessibility, plus internationalised date pickers and calendars, which an organiser needs | Radix UI |
-| Routing | React Router, hash mode | Works on GitHub Pages; pane layout is serialised into the URL | TanStack Router |
+| Routing | React Router 8, hash mode | Works on GitHub Pages; pane layout is serialised into the URL | TanStack Router |
 | Persistent data | Dexie 4 over IndexedDB, with `useLiveQuery` | Schema versions and migrations, compound and multi-entry indexes, reactive queries that update every open view and tab | `idb` (v1; too low-level), RxDB, SQLite-WASM on OPFS |
 | UI state | Zustand | Small and simple, for panes, selection and tool settings | Redux Toolkit, Jotai |
 | Text editor | TipTap 3 (ProseMirror) + `@tiptap/markdown` **(spike P0.8)** | Custom nodes (sketch block, date chip, wikilink), official two-way markdown, good mobile support, MIT core | Milkdown (markdown-first fallback), Lexical, CodeMirror live preview |
@@ -52,6 +52,8 @@ src/
     groups/  inbox/  today/  timeline/  calendar/  tasks/  search/
     capture/  history/  backup/  import-export/  reminders/  settings/  onboarding/
   workers/       search index, thumbnails, import/export parsing
+  lab/           prototypes such as the ink lab (spike P0.7)
+  spikes/        experiment tests that back decisions (e.g. the markdown round-trip corpus)
   lib/           ids, dates, fractional ordering, markdown helpers, colour palette
   test/          fixtures (including v1 databases), helpers
 ```
@@ -87,6 +89,7 @@ interface Meta {
   updatedAt: Instant;
   deletedAt: Instant | null; // set = in Trash (purged after 30 days); also the future sync tombstone
   rev: number;               // incremented on every write
+  updatedBy: string;         // per-install device id of the last writer
 }
 
 type ColourKey = 'lemon' | 'apricot' | 'coral' | 'lilac' | 'sky' | 'mint' | 'sand' | 'slate';
@@ -169,7 +172,7 @@ interface Setting    { key: string; value: unknown }
 - strokes: `pageId`
 - boardNodes: `boardId`, `itemId`
 - links: `fromItemId`, `toItemId`
-- taskRefs: `itemId`, `date`, `done`
+- taskRefs: `itemId`, `date` (`done` is filtered in memory: IndexedDB can't index booleans)
 - attachments and versions: `itemId`
 
 Items with no date simply don't appear in the date indexes. That's what we want.
@@ -203,10 +206,10 @@ Later options, to be recorded in an ADR at that phase:
 
 ## 7. Text editor
 
-- **TipTap 3:** StarterKit, task list, table, code block (lowlight), image, link, placeholder, plus custom nodes:
+- **TipTap 3:** StarterKit, task list, table, code block (lowlight), image (required: without it images are silently dropped), link, placeholder, plus custom nodes:
   - `SketchBlock`: an inline ink document (NOTE-8)
   - `DateChip`: `@fri` → a date, from `chrono-node`
-  - `WikiLink`, in Phase 5
+  - `WikiLink`: the node ships in Phase 1 so `[[links]]` are stored unescaped; link features come in Phase 5 (prototype: `app/src/spikes/wikiLink.ts`)
 - **Markdown is the canonical storage.** Custom nodes stay readable as plain Markdown:
   - Sketch: `![sketch](ndoco:ink/<id>)`. On export this becomes `assets/<id>.svg`.
   - Date chip: `@2026-10-03`, readable as text and re-parsed on load.

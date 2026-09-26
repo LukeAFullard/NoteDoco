@@ -1,6 +1,6 @@
 # NoteDoco — Product Plan v2 (fresh start)
 
-> **Status:** Draft for review · 26 September 2026
+> **Status:** Phase 0 built (see §9) · 26 September 2026
 > **Replaces:** the v1 plan (still in git history: `git show 89b9564:PROJECT_PLAN.md`).
 > **Companion docs:** [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) covers how to build it. [`docs/RESEARCH.md`](docs/RESEARCH.md) covers what other apps and the web platform taught us, with sources.
 
@@ -378,12 +378,17 @@ Sizes: **S** = one small PR, **M** = a few PRs, **L** = several PRs (split it be
 
 ### Phase 0 — Foundation and risk spikes
 
+> **Status (26 Sep 2026):** built.
+> - **Done:** P0.1–P0.6 and P0.8 (see `docs/decisions/` and `docs/spikes/P0.8-markdown-roundtrip.md`).
+> - **P0.7:** the ink lab is built and passes automated pen tests, but is **waiting for real-device results** before decision 0004 is accepted (`docs/spikes/P0.7-ink-lab.md`).
+> - **Extra, pulled forward from P1.1:** creating, colouring and trashing groups, with undo, so the data layer is exercised end to end.
+
 No user-facing features yet. The goal is a solid base, and early answers to the two riskiest questions: can ink feel good in a browser, and can the editor keep markdown intact?
 
 | ID | Task | Size | Done when |
 |---|---|---|---|
 | P0.1 | Decision records (ADRs) for the choices in §10 and `docs/ARCHITECTURE.md` §2 | S | ADRs merged under `docs/decisions/` |
-| P0.2 | Fresh scaffold on a `v2` branch: Vite, React 19, strict TypeScript, Tailwind v4, oxlint, Vitest, Playwright; feature-folder layout; `AGENTS.md` with conventions; a real README | M | CI runs lint, typecheck, unit tests and an e2e smoke test on every PR |
+| P0.2 | Fresh scaffold in `app/` (deployed at `/NoteDoco/next/` beside v1, decision 0002): Vite, React 19, strict TypeScript, Tailwind v4, oxlint, Vitest, Playwright; feature-folder layout; `AGENTS.md` with conventions; a real README | M | CI runs lint, typecheck, unit tests and an e2e smoke test on every PR |
 | P0.3 | Design system: tokens (UI palette + 8-colour content palette for light and dark), type scale, spacing, motion; accessible primitives; light/dark/system theming (UX-1); a `/dev` gallery page | L | Every primitive works by keyboard and passes contrast checks in both themes |
 | P0.4 | Data layer: schema, repositories, live queries, migrations, sortable IDs, manual ordering, soft delete, undo stack | L | CRUD, undo and migration tests pass. If storage fails, the app says so; it never silently keeps data only in memory. |
 | P0.5 | App shell: sidebar, drawer, bottom bar; pane-based layout (one pane for now) with state in the URL; command palette skeleton; toasts; theming; error boundary | M | Works at 360 px, 768 px and 1280 px+ |
@@ -499,7 +504,7 @@ The recommended answer is what the plan assumes. Changing D1 or D2 changes the a
 | D6 | Handwriting recognition: on-device only, or an opt-in cloud service? | **On-device only.** Revisit later. | Privacy-first; browser support is limited today (see `docs/RESEARCH.md`). |
 | D7 | Is the TimeDoco bridge still a goal? | Keep the link; **park the bridge until after v2.0**. | Not part of the new brief. |
 | D8 | Does anyone use the current deployed app? | Assume yes, and **migrate v1 data automatically** (P1.10). | Cheap insurance. |
-| D9 | How to switch from v1 to v2? | Build v2 on a `v2` branch; switch the live site at M1. | v1 keeps working until v2 can replace it. |
+| D9 | How to switch from v1 to v2? | **Changed:** build v2 in `app/` on `main` and preview it at `/NoteDoco/next/`; switch at M1 (decision 0002). | v1 keeps working, and v2 can be tried on real devices from day one. |
 
 ## 11. Risks and mitigations
 
