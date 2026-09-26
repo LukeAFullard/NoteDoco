@@ -70,3 +70,31 @@ test('Today: quick capture reads dates; ticking a to-do can be undone; Tasks lis
   await page.getByText('Show done').click();
   await expect(page.getByRole('region', { name: 'Done' }).getByRole('checkbox', { name: 'send invites' })).toHaveAttribute('aria-checked', 'true');
 });
+
+test('a reminder goes off in the app, and an item can be added to a calendar (.ics)', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'menu-driven flow');
+  await page.goto('/#/today');
+  const bar = page.getByRole('textbox', { name: 'Quick add' });
+  await bar.fill('Call mum');
+  await bar.press('Enter');
+  const row = page.getByRole('region', { name: 'Today’s plan' }).locator('[data-item-id]').first();
+  await row.hover();
+  await row.getByRole('button', { name: 'Item actions' }).click();
+  await page.getByRole('menuitem', { name: 'Date and repeat…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Date and repeat' });
+  await dialog.getByRole('combobox', { name: 'Reminder' }).selectOption('custom');
+  // A minute ago: it goes off as soon as it's saved.
+  const d = new Date(Date.now() - 60_000);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  await dialog.getByLabel('Remind me at').fill(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`);
+  await dialog.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('status').getByText('Reminder: Call mum')).toBeVisible({ timeout: 10_000 });
+
+  await row.hover();
+  await row.getByRole('button', { name: 'Item actions' }).click();
+  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('menuitem', { name: 'Add to calendar (.ics)' }).click()]);
+  expect(download.suggestedFilename()).toBe('Call mum.ics');
+  const text = await (await download.createReadStream()).toArray().then((c) => Buffer.concat(c).toString());
+  expect(text).toContain('SUMMARY:Call mum');
+  expect(text).toContain('BEGIN:VALARM');
+});

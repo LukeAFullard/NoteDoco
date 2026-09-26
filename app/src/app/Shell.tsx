@@ -1,4 +1,4 @@
-import { Suspense, lazy, useMemo } from 'react';
+import { Suspense, lazy, useEffect, useMemo } from 'react';
 import { NavLink, Outlet } from 'react-router';
 import { CalendarDays, Inbox, Menu as MenuIcon, Search } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -11,6 +11,23 @@ import { LazyNewMenu as NewMenu } from '@/features/capture/LazyNewMenu';
 import { useCreate } from '@/features/capture/useCreate';
 import { useStickyDialog } from '@/features/stickies/stickyDialog';
 import { useGlobalShortcuts } from './shortcuts';
+import { useMissed } from '@/features/reminders/store';
+
+/** Starts reminders once the app has settled, and opens items from notification clicks. */
+function useReminders() {
+  useEffect(() => {
+    const start = () => void import('@/features/reminders/scheduler').then((m) => m.startReminders());
+    const timer = window.setTimeout(start, 1500);
+    const onMessage = (e: MessageEvent) => {
+      if (e.data?.type === 'notedoco:open' && typeof e.data.hash === 'string') location.hash = e.data.hash;
+    };
+    navigator.serviceWorker?.addEventListener('message', onMessage);
+    return () => {
+      clearTimeout(timer);
+      navigator.serviceWorker?.removeEventListener('message', onMessage);
+    };
+  }, []);
+}
 
 // Loaded on first use to keep the startup bundle small.
 const CommandPalette = lazy(() => import('./CommandPalette').then((m) => ({ default: m.CommandPalette })));
@@ -19,6 +36,7 @@ const ShortcutsDialog = lazy(() => import('./ShortcutsDialog').then((m) => ({ de
 const BackupReminder = lazy(() => import('./BackupReminder').then((m) => ({ default: m.BackupReminder })));
 const StickyDialog = lazy(() => import('@/features/stickies/StickyDialog').then((m) => ({ default: m.StickyDialog })));
 const DateDialog = lazy(() => import('@/features/time/DateDialog').then((m) => ({ default: m.DateDialog })));
+const MissedDialog = lazy(() => import('@/features/reminders/MissedDialog').then((m) => ({ default: m.MissedDialog })));
 const StickyDock = lazy(() => import('@/features/stickies/StickyDock').then((m) => ({ default: m.StickyDock })));
 
 function BottomTab({ to, onPress, icon, label }: { to?: string; onPress?: () => void; icon: ReactNode; label: string }) {
@@ -46,6 +64,8 @@ export function Shell() {
     [create],
   );
   useGlobalShortcuts(actions);
+  useReminders();
+  const missedCount = useMissed((s) => s.missed.length);
   const drawerOpen = useUi((s) => s.drawerOpen);
   const focusMode = useUi((s) => s.focusMode);
   const shortcutsOpen = useUi((s) => s.shortcutsOpen);
@@ -106,6 +126,7 @@ export function Shell() {
         {!focusMode && <StickyDock />}
         {stickyOpen && <StickyDialog />}
         {dateDialogOpen && <DateDialog />}
+        {missedCount > 0 && <MissedDialog />}
       </Suspense>
       <Toaster />
     </div>

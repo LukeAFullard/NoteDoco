@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router';
 import {
-  Archive, CalendarClock, CheckCircle2, Circle, Combine, Copy, Download, ExternalLink, FileText, FolderInput, Inbox, ListTodo, MoreHorizontal, Palette, Pin, PinOff, Trash2,
+  Archive, CalendarClock, CalendarPlus, CheckCircle2, Circle, Combine, Copy, Download, ExternalLink, FileText, FolderInput, Inbox, ListTodo, MoreHorizontal, Palette, Pin, PinOff, Trash2,
 } from 'lucide-react';
 import { Menu as AriaMenu, MenuTrigger, Popover, SubmenuTrigger } from 'react-aria-components';
 import type { Item } from '@/data/types';
@@ -114,6 +114,16 @@ export function ItemActionsMenu({ items, onOpen, triggerLabel = 'Item actions' }
               }}
             >
               <Copy size={15} aria-hidden /> Duplicate
+            </MenuItem>
+          )}
+          {single && (single.when || single.due) && (
+            <MenuItem
+              onAction={async () => {
+                const [{ toIcs, icsFileName }, { download }] = await Promise.all([import('@/lib/ics'), import('@/backup/backup')]);
+                download(new Blob([toIcs([single])], { type: 'text/calendar' }), icsFileName(single.title));
+              }}
+            >
+              <CalendarPlus size={15} aria-hidden /> Add to calendar (.ics)
             </MenuItem>
           )}
           {single?.kind === 'note' && (
