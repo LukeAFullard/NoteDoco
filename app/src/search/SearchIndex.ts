@@ -111,7 +111,9 @@ export class SearchIndex {
       updatedAt: item.updatedAt,
     });
     this.revs.set(item.id, item.rev);
-    this.texts.set(item.id, text);
+    // Snippets show the text after the title, since the title is displayed anyway.
+    const lines = text.split('\n');
+    this.texts.set(item.id, lines[0]?.trim() === item.title.trim() ? lines.slice(1).join('\n') : text);
   }
 
   search(q: string, limit = 50): SearchHit[] {

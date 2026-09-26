@@ -60,27 +60,32 @@ export function StickiesPage() {
       }
     >
       <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
+        {/* Phones show swatches only (named for screen readers); wider screens add the labels. */}
         <div role="group" aria-label="Filter by colour" className="flex flex-wrap gap-1.5">
           {COLOUR_KEYS.map((c) => (
             <button
               key={c}
               type="button"
               aria-pressed={colours.has(c)}
+              aria-label={meanings[c] || COLOUR_LABELS[c]}
+              title={meanings[c] || COLOUR_LABELS[c]}
               onClick={() => toggleColour(c)}
               className={cn(
-                'flex h-8 items-center gap-1.5 rounded-full border px-2.5 text-xs',
+                'flex h-8 items-center gap-1.5 rounded-full border px-2 text-xs sm:px-2.5',
                 colours.has(c) ? 'border-accent bg-accent-soft font-medium' : 'border-border hover:border-accent/60',
               )}
             >
-              <span className="h-3.5 w-3.5 rounded-[2px] border border-black/10" style={{ background: `var(--sticky-${c})` }} aria-hidden />
-              {meanings[c] || COLOUR_LABELS[c]}
+              <span className="h-4 w-4 rounded-[2px] border border-black/10 sm:h-3.5 sm:w-3.5" style={{ background: `var(--sticky-${c})` }} aria-hidden />
+              <span className="hidden sm:inline" aria-hidden>
+                {meanings[c] || COLOUR_LABELS[c]}
+              </span>
             </button>
           ))}
           <Button size="sm" variant="ghost" onPress={() => setEditingMeanings(true)}>
             <Tags size={14} aria-hidden /> Meanings
           </Button>
         </div>
-        <span className="flex-1" />
+        <span className="hidden flex-1 md:block" />
         <select aria-label="Filter by group" value={group} onChange={(e) => setGroup(e.target.value)} className="h-8 rounded-panel border border-border bg-surface px-2 text-sm">
           <option value="all">All groups</option>
           <option value="inbox">Inbox</option>

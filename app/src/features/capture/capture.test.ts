@@ -11,7 +11,8 @@ it('cycles sticky colours so a burst of ideas isn’t all one colour', async () 
 });
 
 it('pastes a list as one sticky per line', async () => {
-  const ids = await stickiesFromLines('- milk\n\n* eggs\n1. bread\n- [ ] jam', null);
+  const ids = await stickiesFromLines('- milk\n\n* eggs\n1. bread\n- [ ] jam\n[x] done', null);
   const texts = await Promise.all(ids.map(async (id) => (await db.stickyBodies.get(id))!.text));
-  expect(texts).toEqual(['milk', 'eggs', 'bread', 'jam']);
+  expect(texts).toEqual(['milk', 'eggs', 'bread', '- [ ] jam', '- [x] done']);
+  expect((await db.items.get(ids[3]!))!.stats.checklistTotal).toBe(1);
 });

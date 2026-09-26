@@ -26,11 +26,18 @@ export async function newSticky(
   return id;
 }
 
-/** "Paste as stickies": one sticky per non-empty line (list markers removed). */
+/**
+ * "Paste as stickies": one sticky per non-empty line. List markers are removed, but checklist
+ * lines ("- [ ] milk") stay checklists, so they become tickable stickies.
+ */
 export async function stickiesFromLines(text: string, groupId: Id | null): Promise<Id[]> {
   const lines = text
     .split('\n')
-    .map((l) => l.replace(/^\s*(?:[-*+•]|\d+[.)])\s+(\[[ xX]\]\s+)?/, '').trim())
+    .map((l) => {
+      const task = /^\s*(?:[-*+•]|\d+[.)])?\s*\[( |x|X)\]\s+(.+)$/.exec(l);
+      if (task) return `- [${task[1] === ' ' ? ' ' : 'x'}] ${task[2]!.trim()}`;
+      return l.replace(/^\s*(?:[-*+•]|\d+[.)])\s+/, '').trim();
+    })
     .filter(Boolean);
   const ids: Id[] = [];
   for (const line of lines) ids.push(await newSticky(groupId, line));

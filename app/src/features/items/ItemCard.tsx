@@ -129,7 +129,7 @@ export function ItemCard({ item, density, selected, selecting, onSelect, href }:
     // keyboard and screen-reader users get a real link that becomes visible on focus.
     return (
       <div
-        className="group relative focus-within:rounded-[3px] focus-within:ring-2 focus-within:ring-focus"
+        className="group relative w-fit focus-within:rounded-[3px] focus-within:ring-2 focus-within:ring-focus"
         data-item-id={item.id}
         {...drag}
         onClick={(e) => {
@@ -154,8 +154,9 @@ export function ItemCard({ item, density, selected, selecting, onSelect, href }:
         >
           {`Open sticky: ${itemTitle(item.title, item.kind)}`}
         </Link>
+        {/* Bottom corner: the top of a sticky is where its text is. */}
         <div
-          className="absolute top-1 right-1 z-10 flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100"
+          className="absolute right-1 bottom-1 z-10 flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100"
           onClick={(e) => e.stopPropagation()}
         >
           {checkbox}

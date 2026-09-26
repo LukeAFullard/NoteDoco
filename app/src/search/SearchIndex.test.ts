@@ -13,7 +13,7 @@ it('finds items by title and body, with typos and prefixes, and snippets around 
   await index.sync();
   expect(index.search('lanch').map((h) => h.title)).toEqual(['Launch plan']); // typo
   expect(index.search('fri').map((h) => h.title)).toEqual(['Launch plan']); // prefix
-  expect(index.search('beta')[0]!.snippet).toContain('Ship the beta on Friday');
+  expect(index.search('beta')[0]!.snippet).toBe('Ship the beta on Friday'); // title not repeated
 });
 
 it('applies filters: tags, kind, colour, group, pinned, open checklists', async () => {

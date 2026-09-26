@@ -97,6 +97,8 @@ export function ItemCollection({ items, prefs, empty, hrefFor = (i) => `/items/$
   if (!items.length) return <>{empty}</>;
 
   const density: Density = prefs.view === 'list' ? 'row' : 'card';
+  // A collection of only stickies is laid out like a wall: stickies at their own sizes, wrapping.
+  const wall = prefs.view === 'cards' && sorted.every((i) => i.kind === 'sticky');
   const onSelect = (item: Item, e: { shiftKey: boolean }) => (e.shiftKey ? selectRange(item.id, order) : toggleSelected(item.id));
 
   return (
@@ -106,7 +108,9 @@ export function ItemCollection({ items, prefs, empty, hrefFor = (i) => `/items/$
         className={cn(
           prefs.view === 'list'
             ? 'flex flex-col px-2 py-2'
-            : 'grid grid-cols-[repeat(auto-fill,minmax(12rem,1fr))] items-start gap-4 p-4',
+            : wall
+              ? 'flex flex-wrap items-start justify-center gap-4 p-4 sm:justify-start sm:gap-6 sm:p-5'
+              : 'grid grid-cols-[repeat(auto-fill,minmax(12rem,1fr))] items-start gap-4 p-4',
         )}
       >
         {sorted.map((item) => (
