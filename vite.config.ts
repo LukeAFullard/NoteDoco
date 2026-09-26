@@ -13,6 +13,8 @@ export default defineConfig({
       includeAssets: ['favicon.svg'],
       workbox: {
         navigateFallback: `${base}index.html`,
+        // v2 is served from ${base}next/ with its own service worker; don't answer its navigations with v1.
+        navigateFallbackDenylist: [new RegExp(`^${base}next/`)],
       },
       manifest: {
         name: 'NoteDoco',
@@ -30,5 +32,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
+    // app/ is v2 with its own test setup.
+    exclude: ['**/node_modules/**', 'app/**'],
   },
 })

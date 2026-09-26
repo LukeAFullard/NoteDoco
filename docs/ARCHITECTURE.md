@@ -14,14 +14,14 @@
 
 | Concern | Choice | Why | Considered |
 |---|---|---|---|
-| Build and UI | Vite, React 19, TypeScript (strict) | Keep what works; the richest ecosystem for editors and canvases | Svelte/Solid: smaller, but not worth a switch |
+| Build and UI | Vite 8, React 19, TypeScript 7 (strict) | Keep what works; the richest ecosystem for editors and canvases | Svelte/Solid: smaller, but not worth a switch |
 | Styling | Tailwind CSS v4 + CSS custom properties for design tokens | Tokens make theming (light/dark, sticky palette) one place | CSS Modules |
 | Accessible UI primitives | React Aria Components | Strong accessibility, plus internationalised date pickers and calendars, which an organiser needs | Radix UI |
-| Routing | React Router, hash mode | Works on GitHub Pages; pane layout is serialised into the URL | TanStack Router |
+| Routing | React Router 8, hash mode | Works on GitHub Pages; pane layout is serialised into the URL | TanStack Router |
 | Persistent data | Dexie 4 over IndexedDB, with `useLiveQuery` | Schema versions and migrations, compound and multi-entry indexes, reactive queries that update every open view and tab | `idb` (v1; too low-level), RxDB, SQLite-WASM on OPFS |
 | UI state | Zustand | Small and simple, for panes, selection and tool settings | Redux Toolkit, Jotai |
 | Text editor | TipTap 3 (ProseMirror) + `@tiptap/markdown` **(spike P0.8)** | Custom nodes (sketch block, date chip, wikilink), official two-way markdown, good mobile support, MIT core | Milkdown (markdown-first fallback), Lexical, CodeMirror live preview |
-| Source mode | CodeMirror 6, lazy-loaded | Exact raw-markdown editing | Plain textarea |
+| Source mode | A plain monospace text area | Exact raw-markdown editing with nothing extra to download, and iPad Scribble works in it | CodeMirror 6 (revisit if people want highlighting in source mode) |
 | Ink | Custom engine: Pointer Events + `perfect-freehand` + Canvas 2D + `rbush` **(spike P0.7)** | Handwriting-grade control (pages, palm rejection, pen buttons) and a licence-free core for the product's key feature | tldraw SDK (production needs a licence key: the hobby tier keeps a watermark, commercial is paid); Excalidraw (whiteboard-first, hand-drawn look) |
 | Boards | The same canvas core, with a DOM layer for cards and stickies | Real text elements for editing, accessibility and crisp type; one camera for ink and cards | xyflow (node graphs), tldraw |
 | Timeline | Custom: a time-scale module plus virtualised DOM layout | The signature feature. FullCalendar's timeline/resource views are paid add-ons; vis-timeline looks dated and is hard to integrate. | vis-timeline, FullCalendar Premium |
@@ -52,6 +52,8 @@ src/
     groups/  inbox/  today/  timeline/  calendar/  tasks/  search/
     capture/  history/  backup/  import-export/  reminders/  settings/  onboarding/
   workers/       search index, thumbnails, import/export parsing
+  lab/           prototypes such as the ink lab (spike P0.7)
+  spikes/        experiment tests that back decisions (e.g. the markdown round-trip corpus)
   lib/           ids, dates, fractional ordering, markdown helpers, colour palette
   test/          fixtures (including v1 databases), helpers
 ```
@@ -87,6 +89,7 @@ interface Meta {
   updatedAt: Instant;
   deletedAt: Instant | null; // set = in Trash (purged after 30 days); also the future sync tombstone
   rev: number;               // incremented on every write
+  updatedBy: string;         // per-install device id of the last writer
 }
 
 type ColourKey = 'lemon' | 'apricot' | 'coral' | 'lilac' | 'sky' | 'mint' | 'sand' | 'slate';
@@ -111,7 +114,8 @@ interface Item extends Meta {
   title: string;             // explicit, or derived from the first line
   preview: string;           // derived plain-text excerpt for cards and search
   colour: ColourKey | null;
-  tags: string[];
+  tags: string[];            // all tags: picker tags + #tags found in the text (indexed)
+  manualTags: string[];      // tags added with the tag picker
   pinned: boolean;
   archived: boolean;
   when: TimeSpan | null;     // its place on the timeline and calendar
@@ -169,7 +173,7 @@ interface Setting    { key: string; value: unknown }
 - strokes: `pageId`
 - boardNodes: `boardId`, `itemId`
 - links: `fromItemId`, `toItemId`
-- taskRefs: `itemId`, `date`, `done`
+- taskRefs: `itemId`, `date` (`done` is filtered in memory: IndexedDB can't index booleans)
 - attachments and versions: `itemId`
 
 Items with no date simply don't appear in the date indexes. That's what we want.
@@ -203,16 +207,18 @@ Later options, to be recorded in an ADR at that phase:
 
 ## 7. Text editor
 
-- **TipTap 3:** StarterKit, task list, table, code block (lowlight), image, link, placeholder, plus custom nodes:
+- **TipTap 3:** StarterKit, task list, table, code block (lowlight), image (required: without it images are silently dropped), link, placeholder, plus custom nodes:
   - `SketchBlock`: an inline ink document (NOTE-8)
   - `DateChip`: `@fri` → a date, from `chrono-node`
-  - `WikiLink`, in Phase 5
+  - `WikiLink`: the node ships in Phase 1 so `[[links]]` are stored unescaped; link features come in Phase 5 (prototype: `app/src/spikes/wikiLink.ts`)
 - **Markdown is the canonical storage.** Custom nodes stay readable as plain Markdown:
   - Sketch: `![sketch](ndoco:ink/<id>)`. On export this becomes `assets/<id>.svg`.
   - Date chip: `@2026-10-03`, readable as text and re-parsed on load.
   - Wikilink: `[[Title]]`, or `[[Group/Title]]` when titles clash. This matches Obsidian's path links in the exported folder. Links resolve to IDs in the `links` table and are rewritten when a note is renamed.
-- **Plain-text notes** use a plain text area (or CodeMirror without markdown), stored byte-for-byte.
-- **Source mode** is CodeMirror 6 with markdown highlighting. Switching modes round-trips through Markdown.
+- **Plain-text notes** use a plain text area, stored byte-for-byte.
+- **Source mode** is a monospace text area over the raw Markdown. Switching modes round-trips through Markdown.
+- **Attachments** (pasted or dropped images and files) are stored as blobs and referenced in Markdown as `ndoco:attachment/<id>`; the editor's image node view swaps in a blob URL. Export rewrites these to files in an `assets/` folder.
+- **History:** a compressed snapshot (fflate) on open, at most every 5 minutes while editing, and on leaving; identical snapshots are skipped and each note keeps its first version plus the newest 150.
 - **Derived on save** (in a worker if large): the preview, checklist stats, tags, date mentions and links. These are written to the item and the derived tables, so list, timeline and tasks queries never parse bodies.
 - **Round-trip safety:** a Markdown corpus in CI asserts parse → serialise stability (spike P0.8 creates it).
 - **Keep iPad Scribble working.** Use real `contenteditable`/inputs, and don't swallow input events in custom key handlers.
@@ -307,6 +313,8 @@ How strokes are drawn:
 
 ## 11. Search
 
+> Built in Phase 1: `app/src/search/` (index, query parser) and `app/src/workers/search.worker.ts`. The worker re-syncs on Dexie's `storagemutated` event, so edits in any tab reach it.
+
 - **Index:** MiniSearch in a Web Worker. Fields: title (boost 3), body text (markdown stripped), sticky text, tags (boost 2), attachment names. Later, recognised handwriting and OCR text.
 - **Updates:** repositories post changes to the worker after each write. The index snapshot is persisted so startup doesn't re-index, and it's rebuilt when the schema version changes.
 - **Query syntax:** free text plus filters: `tag:`, `in:<group>`, `kind:`, `colour:`, `due:<date`, `is:open`, `has:ink`. The filter chips in the UI write the same syntax, so power users can type it.
@@ -333,7 +341,7 @@ So the design is:
   - name, maskable PNG and SVG icons;
   - `shortcuts`: New note, New sticky, New ink note, Today;
   - `share_target` (Android and desktop Chromium only; iOS doesn't support it);
-  - `file_handlers` for `.md`, `.canvas` and `.ndoco.zip` (Chromium desktop);
+  - `file_handlers` for `.md`, `.canvas` and backup `.zip` files (Chromium desktop);
   - `launch_handler` set to focus an existing window.
 - **Service worker** (Workbox via `vite-plugin-pwa`): precache the shell. Use a *prompt* update strategy ("Update ready — reload") instead of v1's auto-update, so an update never reloads the page mid-edit.
 - **Floating stickies:** Document Picture-in-Picture opens an always-on-top window with the sticky dock. It works in Chromium desktop browsers and in Firefox desktop since 151 (May 2026). Elsewhere, the option falls back to the in-app dock.
@@ -343,7 +351,7 @@ So the design is:
 
 | Format | Direction | Notes |
 |---|---|---|
-| `.ndoco.zip` full backup | Both | Versioned JSON plus attachment blobs; restore as replace or merge (newest `updatedAt` wins) |
+| Backup `notedoco-backup-YYYY-MM-DD.zip` | Both | `manifest.json` (format, versions, counts), `data/<table>.json` (binary fields as base64), `attachments/<id>` as real files. Restore by merge (newest `updatedAt` wins; bodies follow their item) or replace. Built: `app/src/backup/backup.ts` |
 | Markdown `.md` with YAML front matter | Both | Front matter holds id, group, tags, dates, colour; sketches exported as SVG assets |
 | Plain text `.txt` | Both | — |
 | PDF / SVG / PNG | Export | Ink pages (vector PDF via `pdf-lib`), boards, timeline (P5) |
