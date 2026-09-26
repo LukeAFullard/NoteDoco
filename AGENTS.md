@@ -14,7 +14,7 @@ Guidance for anyone (people or AI coding agents) changing this repository. Read 
 | `npm run dev` | Dev server |
 | `npm run lint` · `npm run typecheck` · `npm run test` | Must all pass before a PR |
 | `npm run build && npm run size` | Production build and the startup-JavaScript budget (200 KB gzipped) |
-| `npm run e2e` | Playwright end-to-end tests (desktop and phone). In the cloud dev container set `PW_CHROMIUM_PATH=/opt/pw-browsers/chromium-1194/chrome-linux/chrome` |
+| `npm run e2e` | Playwright end-to-end tests (desktop and phone), including axe accessibility scans and a phone-overflow check. In the cloud dev container set `PW_CHROMIUM_PATH=/opt/pw-browsers/chromium-1194/chrome-linux/chrome` |
 
 ## Code layout (`app/src/`)
 `app/` shell, routing, palette · `design/` tokens and primitives · `data/` database, repositories, undo · `canvas/` shared pen/canvas core · `features/<area>/` screens · `lab/` prototypes · `spikes/` experiment tests · `lib/` helpers. See ARCHITECTURE §3.
@@ -34,6 +34,15 @@ Guidance for anyone (people or AI coding agents) changing this repository. Read 
 9. **Preferences** in `localStorage` go through `lib/localPref.ts` (keys are prefixed; the origin is shared with other GitHub Pages sites).
 10. **Words:** UI copy is plain, friendly British English ("colour", "organise"). Identifiers use `colour` too, for consistency.
 11. Register new screens and actions in the command palette (`app/CommandPalette.tsx`).
+
+## Gotchas we've hit (don't repeat them)
+- **File inputs:** copy `input.files` into an array before resetting the input. The FileList is live and empties.
+- **Typed arrays from storage** can come from another realm: check with `Object.prototype.toString.call(x) === '[object Uint8Array]'`, not `instanceof`.
+- **No horizontal scrollers on phones:** content wider than the screen makes mobile browsers zoom out the whole page (`e2e/layout.spec.ts` guards this).
+- **Transforms create stacking contexts:** a rotated sticky can't lift its children above a sibling overlay link, so sticky cards take clicks themselves.
+- **Don't keep callbacks in a subscribed store** if a component re-registers them every render; that loops. Use a module variable.
+- **e2e:** wait for the editor or dialog to have focus before typing. Shortcuts are ignored while a dialog is open or closing.
+- **Heavy chunks** (editor ≈200 KB gz, search worker) are lazy; the editor is preloaded when idle.
 
 ## Definition of done
 See `PROJECT_PLAN.md` §14. In short: phone/tablet/desktop checked, keyboard and screen-reader friendly, offline, tested (unit + a component or e2e test for the flow), budgets met, undo for reversible actions, designed empty/loading/error states, docs updated.

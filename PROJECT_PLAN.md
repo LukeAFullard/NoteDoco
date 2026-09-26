@@ -398,6 +398,16 @@ No user-facing features yet. The goal is a solid base, and early answers to the 
 
 ### Phase 1 — Notes, stickies and groups → Milestone M1 "replaces v1"
 
+> **Status (26 Sep 2026):** all P1 tasks built and tested:
+> - 109 unit tests and 28 end-to-end tests, including accessibility scans of every screen in both themes and a phone-overflow check;
+> - startup JavaScript 160 KB gzipped.
+>
+> The M1 demo below works end to end. **Waiting on the owner:** try it at `/NoteDoco/next/`, then decide when to switch the live site (move `app/` to the root; see decision 0002).
+>
+> Changes from the plan:
+> - source mode is a plain text area rather than CodeMirror (smaller, and iPad Scribble works in it);
+> - drag and drop uses the browser's own API with menu alternatives, rather than a library.
+
 | ID | Task | Features | Size |
 |---|---|---|---|
 | P1.1 | Groups: create, rename, colour, emoji, nest, drag-reorder, archive, trash | GRP-1, 2, 5 | M |

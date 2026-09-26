@@ -11,7 +11,8 @@ Everything stays on your device: there's no account and no server.
 v2 is being rebuilt from the plan in [`PROJECT_PLAN.md`](PROJECT_PLAN.md).
 
 - **Phase 0 (foundation) is in place:** design system, data layer, app shell, installable PWA, the ink lab, and the editor spike.
-- **Next:** Phase 1 (notes, stickies and groups). v2 replaces v1 at milestone M1.
+- **Phase 1 (notes, stickies and groups) is built:** the formatted note editor, sticky wall, groups with drag and drop, tags, search, history, trash, backup/restore, Markdown import/export, and automatic import of v1 notes.
+- **Next:** switch the live site to v2 (milestone M1), then Phase 2: Today, the timeline with groups side by side, and the calendar.
 
 ## Documents
 - [`PROJECT_PLAN.md`](PROJECT_PLAN.md): features, screens and roadmap
