@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
 import type { Editor } from '@tiptap/core';
-import { Code2, Maximize2, Minimize2, Search, Type } from 'lucide-react';
+import { Code2, History, Maximize2, Minimize2, Search, Type } from 'lucide-react';
 import { db } from '@/data/db';
 import { setBodyText } from '@/data/repos/items';
 import { addAttachment, attachmentIdFromUrl, objectUrlFor } from '@/data/repos/attachments';
@@ -17,6 +17,8 @@ import { Toolbar } from './editor/Toolbar';
 import { FindBar } from './editor/FindBar';
 import { INSERT_IMAGE_EVENT } from './editor/slashCommands';
 import { TagEditor } from '@/features/tags/TagEditor';
+import { SNAPSHOT_INTERVAL_MS, snapshotNote } from '@/data/repos/versions';
+import { HistoryDialog } from './HistoryDialog';
 
 type Mode = 'rich' | 'source';
 type SaveState = 'saved' | 'saving';
@@ -145,6 +147,8 @@ export function NoteEditor({ item }: { item: Item }) {
   const [mode, setMode] = useState<Mode>('rich');
   const [saveState, setSaveState] = useState<SaveState>('saved');
   const [findOpen, setFindOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const focusMode = useUi((s) => s.focusMode);
   const latest = useRef<string | null>(null);
 
@@ -161,7 +165,26 @@ export function NoteEditor({ item }: { item: Item }) {
   const { schedule, flush } = useDebouncedSave(async (text: string) => {
     await setBodyText(item.id, text);
     setSaveState('saved');
+    // A version every few minutes while editing (history, SAFE-5).
+    await snapshotNote(item.id, 'idle', SNAPSHOT_INTERVAL_MS);
   }, 500);
+
+  // A baseline version on open, and one when leaving the note (both skipped if unchanged).
+  useEffect(() => {
+    void snapshotNote(item.id, 'idle');
+    return () => {
+      void flush().then(() => snapshotNote(item.id, 'idle'));
+    };
+  }, [item.id, flush]);
+
+  /** After restoring a version, reload the editor with the restored text. */
+  const reloadFromDb = async () => {
+    const b = await db.noteBodies.get(item.id);
+    if (b) setBody(b);
+    latest.current = null;
+    setReloadKey((k) => k + 1);
+    setHistoryOpen(false);
+  };
 
   const onChange = useCallback(
     (text: string) => {
@@ -224,6 +247,9 @@ export function NoteEditor({ item }: { item: Item }) {
           <MenuItem onAction={() => void setFormat('markdown')}>{!plain && '✓ '}Formatted (Markdown)</MenuItem>
           <MenuItem onAction={() => void setFormat('plain')}>{plain && '✓ '}Plain text (no formatting)</MenuItem>
         </Menu>
+        <IconButton label="Version history" size="sm" onPress={async () => { await flush(); setHistoryOpen(true); }}>
+          <History size={16} />
+        </IconButton>
         <IconButton label={focusMode ? 'Leave focus mode (Esc)' : 'Focus mode'} size="sm" onPress={() => useUi.setState({ focusMode: !focusMode })}>
           {focusMode ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
         </IconButton>
@@ -234,12 +260,13 @@ export function NoteEditor({ item }: { item: Item }) {
         </div>
       )}
       {plain ? (
-        <PlainEditor key={`${item.id}-plain`} text={body.text} onChange={onChange} mono label="Plain-text note" />
+        <PlainEditor key={`${item.id}-plain-${reloadKey}`} text={body.text} onChange={onChange} mono label="Plain-text note" />
       ) : mode === 'source' ? (
-        <PlainEditor key={`${item.id}-source`} text={body.text} onChange={onChange} mono label="Markdown source" />
+        <PlainEditor key={`${item.id}-source-${reloadKey}`} text={body.text} onChange={onChange} mono label="Markdown source" />
       ) : (
-        <RichEditor key={`${item.id}-rich`} item={item} body={body} onChange={onChange} findOpen={findOpen} setFindOpen={setFindOpen} />
+        <RichEditor key={`${item.id}-rich-${reloadKey}`} item={item} body={body} onChange={onChange} findOpen={findOpen} setFindOpen={setFindOpen} />
       )}
+      {historyOpen && <HistoryDialog itemId={item.id} onClose={() => setHistoryOpen(false)} onRestored={() => void reloadFromDb()} />}
     </div>
   );
 }

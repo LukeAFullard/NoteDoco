@@ -183,18 +183,36 @@ export async function restoreItems(ids: Id[]): Promise<void> {
   });
 }
 
-/** Permanently removes items trashed more than `days` ago, with their bodies. Returns the count. */
+/** Permanently deletes items and everything that belongs to them. Only the Trash calls this. */
+export async function deleteItemsForever(ids: Id[]): Promise<void> {
+  await db.transaction('rw', [db.items, db.noteBodies, db.stickyBodies, db.versions, db.attachments, db.links, db.taskRefs], async () => {
+    await db.items.bulkDelete(ids);
+    await db.noteBodies.bulkDelete(ids);
+    await db.stickyBodies.bulkDelete(ids);
+    await db.versions.where('itemId').anyOf(ids).delete();
+    await db.attachments.where('itemId').anyOf(ids).delete();
+    await db.links.where('fromItemId').anyOf(ids).delete();
+    await db.links.where('toItemId').anyOf(ids).delete();
+    await db.taskRefs.where('itemId').anyOf(ids).delete();
+  });
+}
+
+/** Permanently removes items and groups trashed more than `days` ago. Returns how many items went. */
 export async function purgeTrash(days = TRASH_RETENTION_DAYS, now = new Date()): Promise<number> {
   const cutoff = new Date(now.getTime() - days * 86_400_000).toISOString();
-  return db.transaction('rw', [db.items, db.noteBodies, db.stickyBodies, db.versions, db.attachments], async () => {
-    const old = await db.items.where('deletedAt').between('', cutoff, false, true).primaryKeys();
-    await db.items.bulkDelete(old);
-    await db.noteBodies.bulkDelete(old);
-    await db.stickyBodies.bulkDelete(old);
-    await db.versions.where('itemId').anyOf(old).delete();
-    await db.attachments.where('itemId').anyOf(old).delete();
-    return old.length;
-  });
+  const old = await db.items.where('deletedAt').between('', cutoff, false, true).primaryKeys();
+  await deleteItemsForever(old);
+  const oldGroups = await db.groups.where('deletedAt').between('', cutoff, false, true).primaryKeys();
+  await db.groups.bulkDelete(oldGroups);
+  return old.length;
+}
+
+/** Empties the Trash now: every trashed item and group, for good. */
+export async function emptyTrash(): Promise<number> {
+  const items = await db.items.where('deletedAt').above('').primaryKeys();
+  await deleteItemsForever(items);
+  await db.groups.where('deletedAt').above('').delete();
+  return items.length;
 }
 
 /**

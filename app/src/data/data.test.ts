@@ -1,6 +1,6 @@
 import { db } from './db';
 import { buildTree, createGroup, listGroups, moveGroup, restoreGroup, trashGroup, updateGroup } from './repos/groups';
-import { createItem, duplicateItem, listItems, setManualTags, listTrash, moveItem, purgeTrash, restoreItems, setBodyText, trashItems } from './repos/items';
+import { createItem, duplicateItem, emptyTrash, listItems, setManualTags, listTrash, moveItem, purgeTrash, restoreItems, setBodyText, trashItems } from './repos/items';
 import { moveItemWithUndo, trashItemsWithUndo } from './actions';
 import { redo, undo, useUndo } from './undo';
 import { describeStorageError, openStorage, useStorageHealth } from './health';
@@ -116,6 +116,17 @@ describe('items', () => {
     expect(await db.items.get(a)).toBeUndefined();
     expect(await db.noteBodies.get(a)).toBeUndefined();
     expect((await listTrash()).map((i) => i.id)).toEqual([b]);
+  });
+
+  it('empties the Trash, including versions and attachments', async () => {
+    const a = await createItem({ kind: 'note', text: 'a' });
+    const keep = await createItem({ kind: 'note', text: 'keep' });
+    await db.versions.add({ id: 'v', itemId: a, createdAt: '2026-01-01', reason: 'idle', snapshot: new Uint8Array() });
+    await trashItems([a]);
+    expect(await emptyTrash()).toBe(1);
+    expect(await db.items.get(a)).toBeUndefined();
+    expect(await db.versions.get('v')).toBeUndefined();
+    expect(await db.items.get(keep)).toBeDefined();
   });
 });
 
