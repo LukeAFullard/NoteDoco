@@ -1,6 +1,6 @@
 import { Command } from 'cmdk';
 import { useNavigate } from 'react-router';
-import { CalendarDays, FilePlus, FlaskConical, FolderPlus, Inbox, Keyboard, Moon, Palette, Redo2, Settings, StickyNote, Sun, Trash2, Undo2 } from 'lucide-react';
+import { CalendarDays, FilePlus, FlaskConical, Hash, FolderPlus, Inbox, Keyboard, Moon, Palette, Redo2, Settings, StickyNote, Sun, Trash2, Undo2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useGroups } from '@/data/hooks';
 import { openNewGroup, useUi } from './ui';
@@ -72,6 +72,9 @@ export function CommandPalette() {
           ))}
           <Item icon={<FlaskConical size={16} />} onSelect={run(() => navigate('/lab/ink'))} keywords={['pen', 'stylus', 'draw']}>
             Ink lab
+          </Item>
+          <Item icon={<Hash size={16} />} onSelect={run(() => navigate('/tags'))}>
+            Tags
           </Item>
           <Item icon={<Trash2 size={16} />} onSelect={run(() => navigate('/trash'))}>
             Trash

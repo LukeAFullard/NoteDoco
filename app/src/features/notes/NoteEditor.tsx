@@ -16,6 +16,7 @@ import { noteExtensions } from './editor/extensions';
 import { Toolbar } from './editor/Toolbar';
 import { FindBar } from './editor/FindBar';
 import { INSERT_IMAGE_EVENT } from './editor/slashCommands';
+import { TagEditor } from '@/features/tags/TagEditor';
 
 type Mode = 'rich' | 'source';
 type SaveState = 'saved' | 'saving';
@@ -227,6 +228,11 @@ export function NoteEditor({ item }: { item: Item }) {
           {focusMode ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
         </IconButton>
       </div>
+      {!focusMode && (
+        <div className="border-b border-border px-4 py-1.5">
+          <TagEditor item={item} />
+        </div>
+      )}
       {plain ? (
         <PlainEditor key={`${item.id}-plain`} text={body.text} onChange={onChange} mono label="Plain-text note" />
       ) : mode === 'source' ? (

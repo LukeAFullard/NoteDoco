@@ -13,6 +13,7 @@ import { cn } from '@/design/cn';
 import { useDebouncedSave } from '@/lib/useDebouncedSave';
 import { closeSticky, getRequestClose, setRequestClose, useStickyDialog } from './stickyDialog';
 import { linkedNote, promoteToNote } from './promote';
+import { TagEditor } from '@/features/tags/TagEditor';
 
 const SIZES = [
   { v: 'S', label: 'Small' },
@@ -69,6 +70,9 @@ function Editor({ id, fresh, initialText }: { id: string; fresh: boolean; initia
           className="block min-h-48 w-full resize-none bg-transparent text-base text-sticky-ink outline-none placeholder:text-sticky-ink/50"
           style={{ fontFamily: 'var(--sticky-font)' }}
         />
+      </div>
+      <div className="w-full max-w-sm rounded-panel bg-surface px-3 py-2">
+        <TagEditor item={item} />
       </div>
       <ColourSwatches label="Sticky colour" value={colour} onChange={(c) => void setColourWithUndo([id], c)} />
       <div className="flex w-full max-w-md flex-wrap items-center justify-center gap-2">

@@ -9,6 +9,8 @@ import { StickyNote } from '@/features/stickies/StickyNote';
 import { KIND_ICONS, KIND_LABELS, itemTitle } from './kinds';
 import { ItemActionsMenu } from './ItemMenu';
 import { openSticky } from '@/features/stickies/stickyDialog';
+import { canDrag, setDragItems } from '@/lib/dnd';
+import { useSelection } from './selection';
 
 export type Density = 'row' | 'card';
 
@@ -85,6 +87,15 @@ export function ItemCard({ item, density, selected, selecting, onSelect, href }:
     longPress.current = null;
   };
 
+  // Dragging a selected card drags the whole selection (onto a group in the sidebar).
+  const drag = {
+    draggable: canDrag(),
+    onDragStart: (e: React.DragEvent) => {
+      const sel = useSelection.getState().ids;
+      setDragItems(e, sel.has(item.id) ? [...sel] : [item.id]);
+    },
+  };
+
   const checkbox = (
     <input
       type="checkbox"
@@ -120,6 +131,7 @@ export function ItemCard({ item, density, selected, selecting, onSelect, href }:
       <div
         className="group relative focus-within:rounded-[3px] focus-within:ring-2 focus-within:ring-focus"
         data-item-id={item.id}
+        {...drag}
         onClick={(e) => {
           if (suppressClick.current) return void (suppressClick.current = false);
           if (selecting || e.metaKey || e.ctrlKey || e.shiftKey) onSelect(item, e);
@@ -165,6 +177,7 @@ export function ItemCard({ item, density, selected, selecting, onSelect, href }:
     return (
       <div
         data-item-id={item.id}
+        {...drag}
         className={cn('group relative flex items-center gap-3 rounded-panel px-3 py-2.5 hover:bg-surface-2/60', selected && 'bg-accent-soft')}
       >
         {checkbox}
@@ -192,6 +205,7 @@ export function ItemCard({ item, density, selected, selecting, onSelect, href }:
   return (
     <div
       data-item-id={item.id}
+      {...drag}
       className={cn(
         'group relative flex min-h-40 flex-col gap-2 rounded-panel border border-border bg-bg p-3 transition-colors hover:border-accent/50',
         selected && 'border-accent bg-accent-soft',

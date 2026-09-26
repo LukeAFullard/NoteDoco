@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Archive, ArchiveRestore, FolderOpen, FolderPlus, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { Archive, ArchiveRestore, FolderInput, FolderOpen, FolderPlus, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { Menu as AriaMenu, Popover, SubmenuTrigger } from 'react-aria-components';
 import { db } from '@/data/db';
 import { updateGroup } from '@/data/repos/groups';
-import { archiveGroupWithUndo, trashGroupWithUndo } from '@/data/actions';
-import { useItems } from '@/data/hooks';
+import { archiveGroupWithUndo, moveGroupWithUndo, trashGroupWithUndo } from '@/data/actions';
+import { showToast } from '@/design/toast';
+import { useGroups, useItems } from '@/data/hooks';
 import { Pane } from '@/app/Pane';
 import { openNewGroup, setCurrentGroup } from '@/app/ui';
 import { toastWithUndo } from '@/app/undoActions';
@@ -29,6 +31,7 @@ export function GroupPage() {
     [groupId],
   );
   const [editing, setEditing] = useState(false);
+  const allGroups = useGroups() ?? [];
   useEffect(() => setCurrentGroup(groupId), [groupId]);
   usePasteToCreate(groupId);
 
@@ -65,6 +68,33 @@ export function GroupPage() {
             <MenuItem onAction={() => openNewGroup(group.id)}>
               <FolderPlus size={15} aria-hidden /> New sub-group
             </MenuItem>
+            <SubmenuTrigger>
+              <MenuItem>
+                <FolderInput size={15} aria-hidden /> Move group to…
+              </MenuItem>
+              <Popover className="max-h-[60vh] min-w-52 overflow-auto rounded-panel border border-border bg-surface p-1 shadow-lg outline-none">
+                <AriaMenu aria-label="Move group to" className="outline-none">
+                  <MenuItem onAction={async () => toastWithUndo(await moveGroupWithUndo(group.id, null))}>Top level</MenuItem>
+                  {allGroups
+                    .filter((g) => g.id !== group.id && g.id !== group.parentId)
+                    .map((g) => (
+                      <MenuItem
+                        key={g.id}
+                        onAction={async () => {
+                          try {
+                            toastWithUndo(await moveGroupWithUndo(group.id, g.id));
+                          } catch (err) {
+                            showToast({ message: err instanceof Error ? err.message : 'Couldn’t move the group', tone: 'danger' }, 4000);
+                          }
+                        }}
+                      >
+                        <span className="h-2.5 w-2.5 rounded-full" style={{ background: `var(--sticky-${g.colour})` }} />
+                        {g.name}
+                      </MenuItem>
+                    ))}
+                </AriaMenu>
+              </Popover>
+            </SubmenuTrigger>
             <MenuItem onAction={async () => toastWithUndo(await archiveGroupWithUndo(group.id, !group.archived))}>
               {group.archived ? <ArchiveRestore size={15} aria-hidden /> : <Archive size={15} aria-hidden />}
               {group.archived ? 'Unarchive group' : 'Archive group'}

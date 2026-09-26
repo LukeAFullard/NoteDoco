@@ -1,6 +1,6 @@
 import { recordUndo } from './undo';
 import { createItem, duplicateItem, moveItem, restoreItems, trashItems, updateItem } from './repos/items';
-import { restoreGroup, trashGroup, updateGroup } from './repos/groups';
+import { moveGroup, restoreGroup, trashGroup, updateGroup } from './repos/groups';
 import { db } from './db';
 import { touched } from './meta';
 import type { Id, Item } from './types';
@@ -87,3 +87,20 @@ export async function archiveGroupWithUndo(id: Id, archived: boolean): Promise<s
 }
 
 export { createItem };
+
+/** Moves a group under `parentId` (null = top level), before `beforeId` or last; undoable. */
+export async function moveGroupWithUndo(id: Id, parentId: Id | null, beforeId: Id | null = null): Promise<string> {
+  const before = await db.groups.get(id);
+  if (!before) throw new Error(`Group ${id} not found`);
+  await moveGroup(id, parentId, beforeId);
+  const label = 'Group moved';
+  recordUndo({
+    label,
+    undo: async () => {
+      const now = await db.groups.get(id);
+      if (now) await db.groups.put(touched(now, { parentId: before.parentId, order: before.order }));
+    },
+    redo: () => moveGroup(id, parentId, beforeId),
+  });
+  return label;
+}

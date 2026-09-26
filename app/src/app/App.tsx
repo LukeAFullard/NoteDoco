@@ -10,6 +10,7 @@ const SettingsPage = lazy(() => import('@/features/settings/SettingsPage').then(
 const ItemPage = lazy(() => import('@/features/items/ItemPage').then((m) => ({ default: m.ItemPage })));
 const InboxPage = lazy(() => import('@/features/inbox/InboxPage').then((m) => ({ default: m.InboxPage })));
 const StickiesPage = lazy(() => import('@/features/stickies/StickiesPage').then((m) => ({ default: m.StickiesPage })));
+const TagsPage = lazy(() => import('@/features/tags/TagsPage').then((m) => ({ default: m.TagsPage })));
 const DevGallery = lazy(() => import('@/features/dev/DevGallery').then((m) => ({ default: m.DevGallery })));
 const UpdatePrompt = lazy(() => import('./UpdatePrompt').then((m) => ({ default: m.UpdatePrompt })));
 const InkLab = lazy(() => import('@/lab/ink/InkLab').then((m) => ({ default: m.InkLab })));
@@ -26,6 +27,8 @@ const routes = [
       { path: 'stickies', element: <StickiesPage /> },
       { path: 'groups/:groupId', element: <GroupPage /> },
       { path: 'items/:itemId', element: <ItemPage /> },
+      { path: 'tags', element: <TagsPage /> },
+      { path: 'tags/:tag', element: <TagsPage /> },
       { path: 'trash', element: <TrashPage /> },
       { path: 'settings', element: <SettingsPage /> },
       { path: 'dev', element: <DevGallery /> },

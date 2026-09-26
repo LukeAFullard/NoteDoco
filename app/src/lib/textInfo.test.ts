@@ -1,4 +1,4 @@
-import { analyseText, extractTags, stripMarkdownLine, toggleChecklistItem } from './textInfo';
+import { analyseText, extractTags, renameTagInText, stripMarkdownLine, toggleChecklistItem } from './textInfo';
 
 describe('analyseText', () => {
   it('derives title, preview, words and checklist progress from Markdown', () => {
@@ -42,5 +42,12 @@ describe('toggleChecklistItem', () => {
     expect(toggleChecklistItem(md, 0)).toBe('Intro\n- [x] a\n- [x] b\n  - [ ] c');
     expect(toggleChecklistItem(md, 1)).toBe('Intro\n- [ ] a\n- [ ] b\n  - [ ] c');
     expect(toggleChecklistItem(md, 2)).toBe('Intro\n- [ ] a\n- [x] b\n  - [x] c');
+  });
+});
+
+describe('renameTagInText', () => {
+  it('renames whole tags only, outside code, any case', () => {
+    const md = 'Plan #Work and #workshop, (#work)\n`#work` stays\n```\n#work stays\n```\n#work/sub stays';
+    expect(renameTagInText(md, 'work', 'client')).toBe('Plan #client and #workshop, (#client)\n`#work` stays\n```\n#work stays\n```\n#work/sub stays');
   });
 });

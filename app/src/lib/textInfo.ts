@@ -94,3 +94,28 @@ export function toggleChecklistItem(text: string, index: number): string {
     })
     .join('\n');
 }
+
+/**
+ * Renames an inline #tag in text (outside code), case-insensitively. Used by tag rename/merge.
+ * "#old" matches only whole tags: "#older" and "#old/sub" are left alone.
+ */
+export function renameTagInText(text: string, from: string, to: string): string {
+  const esc = from.replace(/[.*+?^${}()|[\]\\/-]/g, '\\$&');
+  const re = new RegExp(`(^|[\\s(])#${esc}(?![\\p{L}\\p{N}_/-])`, 'giu');
+  let inFence = false;
+  return text
+    .split('\n')
+    .map((line) => {
+      if (/^\s*(```|~~~)/.test(line)) {
+        inFence = !inFence;
+        return line;
+      }
+      if (inFence) return line;
+      // Leave inline code untouched: only rewrite the parts between backticks.
+      return line
+        .split(/(`[^`]*`)/)
+        .map((part) => (part.startsWith('`') ? part : part.replace(re, `$1#${to}`)))
+        .join('');
+    })
+    .join('\n');
+}
