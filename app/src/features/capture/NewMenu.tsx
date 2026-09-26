@@ -6,10 +6,11 @@ import { openNewGroup, useUi } from '@/app/ui';
 import { useCreate } from './useCreate';
 
 /** The "+ New" menu: note, sticky, group. */
-export function NewMenu({ className, compact }: { className?: string; compact?: boolean }) {
+export function NewMenu({ className, compact, defaultOpen }: { className?: string; compact?: boolean; defaultOpen?: boolean }) {
   const create = useCreate();
   return (
     <Menu
+      defaultOpen={defaultOpen}
       label="Create"
       trigger={
         <Button variant="primary" size="sm" className={className} aria-label="New">

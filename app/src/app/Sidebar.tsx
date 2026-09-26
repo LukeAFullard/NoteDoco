@@ -3,7 +3,7 @@ import { CalendarDays, FlaskConical, Inbox, Plus, Search, Settings, StickyNote, 
 import type { ReactNode } from 'react';
 import { useGroupTree } from '@/data/hooks';
 import type { GroupNode } from '@/data/repos/groups';
-import { NewMenu } from '@/features/capture/NewMenu';
+import { LazyNewMenu as NewMenu } from '@/features/capture/LazyNewMenu';
 import { Button } from '@/design/Button';
 import { Kbd } from '@/design/Kbd';
 import { cn } from '@/design/cn';

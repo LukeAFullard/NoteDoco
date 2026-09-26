@@ -7,7 +7,7 @@ import { cn } from '@/design/cn';
 import { Sidebar } from './Sidebar';
 import { InstallGuide, StorageBanner } from './Banners';
 import { openPalette, useUi } from './ui';
-import { NewMenu } from '@/features/capture/NewMenu';
+import { LazyNewMenu as NewMenu } from '@/features/capture/LazyNewMenu';
 import { useCreate } from '@/features/capture/useCreate';
 import { useStickyDialog } from '@/features/stickies/stickyDialog';
 import { useGlobalShortcuts } from './shortcuts';

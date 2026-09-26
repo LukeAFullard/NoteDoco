@@ -2,9 +2,9 @@ import type { ReactNode } from 'react';
 import { Menu as AriaMenu, MenuItem as AriaMenuItem, MenuTrigger, Popover, type MenuItemProps } from 'react-aria-components';
 import { cn } from './cn';
 
-export function Menu({ trigger, children, label }: { trigger: ReactNode; children: ReactNode; label: string }) {
+export function Menu({ trigger, children, label, defaultOpen }: { trigger: ReactNode; children: ReactNode; label: string; defaultOpen?: boolean }) {
   return (
-    <MenuTrigger>
+    <MenuTrigger defaultOpen={defaultOpen}>
       {trigger}
       <Popover className="min-w-48 rounded-panel border border-border bg-surface p-1 shadow-lg outline-none">
         <AriaMenu aria-label={label} className="outline-none">
