@@ -1,0 +1,123 @@
+@import 'tailwindcss';
+@import '@fontsource/ibm-plex-sans/400.css';
+@import '@fontsource/ibm-plex-sans/500.css';
+@import '@fontsource/ibm-plex-sans/600.css';
+@import '@fontsource/ibm-plex-mono/400.css';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Design tokens. Two families:
+ *  - UI tokens (bg, surface, text, border, accent, success, danger) come from the Doco palette
+ *    (ink, stone, graphite, signal, verdigris, rust) and swap between light and dark.
+ *    accent = accent-coloured text; accent-fill + on-accent = filled buttons and badges.
+ *  - Content tokens (--sticky-*) colour stickies and groups. Text on them is always --sticky-ink.
+ *    Keep hex values in sync with src/lib/palette.ts (a test checks this).
+ */
+:root {
+  --nd-bg: #eef0ec;
+  --nd-surface: #ffffff;
+  --nd-surface-2: #e3e6e1;
+  --nd-text: #26313a;
+  --nd-muted: #5b6770;
+  --nd-border: rgb(38 49 58 / 0.14);
+  --nd-accent: #7a5c26;
+  --nd-accent-soft: rgb(217 165 74 / 0.18);
+  --nd-accent-fill: #d9a54a;
+  --nd-on-accent: #10161c;
+  --nd-success: #295148;
+  --nd-danger: #9c4a31;
+  --nd-focus: #7a5c26;
+
+  --sticky-ink: #1c1f22;
+  --sticky-lemon: #ffe98a;
+  --sticky-apricot: #ffc98a;
+  --sticky-coral: #ffa8a0;
+  --sticky-lilac: #d9c2f5;
+  --sticky-sky: #a9d4f5;
+  --sticky-mint: #aee5c8;
+  --sticky-sand: #e9dcc4;
+  --sticky-slate: #cbd3da;
+}
+
+.dark {
+  --nd-bg: #10161c;
+  --nd-surface: #1a2229;
+  --nd-surface-2: #26313a;
+  --nd-text: #eef0ec;
+  --nd-muted: #9aa6ae;
+  --nd-border: rgb(238 240 236 / 0.12);
+  --nd-accent: #d9a54a;
+  --nd-accent-soft: rgb(217 165 74 / 0.16);
+  --nd-accent-fill: #d9a54a;
+  --nd-on-accent: #10161c;
+  --nd-success: #6fb3a3;
+  --nd-danger: #e08a6f;
+  --nd-focus: #d9a54a;
+
+  --sticky-lemon: #e6cf6e;
+  --sticky-apricot: #e6ae70;
+  --sticky-coral: #e89a93;
+  --sticky-lilac: #bba4da;
+  --sticky-sky: #8db8da;
+  --sticky-mint: #92c9ac;
+  --sticky-sand: #cdbfa7;
+  --sticky-slate: #aeb7bf;
+}
+
+@theme inline {
+  --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  --color-bg: var(--nd-bg);
+  --color-surface: var(--nd-surface);
+  --color-surface-2: var(--nd-surface-2);
+  --color-text: var(--nd-text);
+  --color-muted: var(--nd-muted);
+  --color-border: var(--nd-border);
+  --color-accent: var(--nd-accent);
+  --color-accent-soft: var(--nd-accent-soft);
+  --color-accent-fill: var(--nd-accent-fill);
+  --color-on-accent: var(--nd-on-accent);
+  --color-success: var(--nd-success);
+  --color-danger: var(--nd-danger);
+  --color-focus: var(--nd-focus);
+
+  --color-sticky-ink: var(--sticky-ink);
+  --color-sticky-lemon: var(--sticky-lemon);
+  --color-sticky-apricot: var(--sticky-apricot);
+  --color-sticky-coral: var(--sticky-coral);
+  --color-sticky-lilac: var(--sticky-lilac);
+  --color-sticky-sky: var(--sticky-sky);
+  --color-sticky-mint: var(--sticky-mint);
+  --color-sticky-sand: var(--sticky-sand);
+  --color-sticky-slate: var(--sticky-slate);
+
+  --radius-panel: 8px;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
