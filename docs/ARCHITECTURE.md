@@ -26,11 +26,11 @@
 | Boards | The same canvas core, with a DOM layer for cards and stickies | Real text elements for editing, accessibility and crisp type; one camera for ink and cards | xyflow (node graphs), tldraw |
 | Timeline | Custom: a time-scale module plus virtualised DOM layout | The signature feature. FullCalendar's timeline/resource views are paid add-ons; vis-timeline looks dated and is hard to integrate. | vis-timeline, FullCalendar Premium |
 | Calendar | Custom month/week grids on `@internationalized/date` | Shares queries and cards with the timeline | FullCalendar (MIT core) |
-| Dates | `date-fns`, `@internationalized/date`, `chrono-node` (natural language), `rrule` (repeats) | Mature and permissively licensed | Temporal API, once broadly shipped |
+| Dates | `Intl` plus small helpers in `lib/time.ts`, `chrono-node` (natural language, loaded on demand), a built-in RRULE subset in `lib/recurrence.ts` | Small, and exactly the semantics we need (floating all-day dates, clamped month ends) | `date-fns`, `rrule`; Temporal once broadly shipped |
 | Search | MiniSearch in a Web Worker | About 6 KB gzipped; prefix, fuzzy and field boosting; fine up to tens of thousands of items | FlexSearch (faster beyond ~100k docs), Orama |
 | Command palette | `cmdk` | Accessible and composable | Custom |
 | Drag and drop (lists, sidebar, columns) | `dnd-kit` | Pointer, touch and keyboard sensors | Pragmatic drag and drop |
-| Virtualised lists | TanStack Virtual | Long lists and the timeline feed | react-window |
+| Virtualised lists | TanStack Virtual, when a list needs it (the timeline has its own windowing) | Long lists | react-window |
 | Zip | `fflate` (already used) | Fast; streams large backups | JSZip |
 | PDF | `pdf-lib` (vector export), `pdf.js` (import and annotate, lazy-loaded) | Permissive licences | jsPDF (v1) |
 | Ordering | `fractional-indexing` | Reorder without renumbering; merges cleanly if sync arrives later | Integer positions |
@@ -49,8 +49,8 @@ src/
     note/  ink/  sticky/  board/
   canvas/        shared camera, input pipeline, gestures, render layers (used by ink and boards)
   features/
-    groups/  inbox/  today/  timeline/  calendar/  tasks/  search/
-    capture/  history/  backup/  import-export/  reminders/  settings/  onboarding/
+    groups/  inbox/  today/  timeline/  calendar/  tasks/  search/  time/
+    capture/  history/  backup/  import-export/  reminders/  settings/  panes/  onboarding/
   workers/       search index, thumbnails, import/export parsing
   lab/           prototypes such as the ink lab (spike P0.7)
   spikes/        experiment tests that back decisions (e.g. the markdown round-trip corpus)
@@ -178,6 +178,8 @@ interface Setting    { key: string; value: unknown }
 
 Items with no date simply don't appear in the date indexes. That's what we want.
 
+**Version 2 (Phase 2)** added a `recurrence` index on items (only repeating items have a string there, so it lists exactly them) and filled `taskRefs` for existing notes. `taskRefs` is derived data: it's rewritten on every body save, and rebuilt after a restore or the v1 migration rather than trusted from a backup. `data/agenda.ts` holds the shared date queries (`placedBetween` with repeats expanded, dated checklist lines, overdue items) used by Today, Tasks, the timeline and the calendar.
+
 ## 5. Storage and durability
 
 - **Database:** Dexie over IndexedDB, named `notedoco`. The v1 database (`note-doco-db`) is read during migration and otherwise left untouched.
@@ -298,6 +300,8 @@ How strokes are drawn:
 
 ## 10. Timeline and calendar engine
 
+> Built in Phase 2: `features/timeline/` (scale, layout, canvas, phone feed, lane picker, saved layouts), `features/calendar/` (month, week, agenda, mini-calendar) and `features/time/` (date dialog, natural-language dates, agenda rows). Every day is the same width on the axis (days since the origin plus the fraction of that local day), so daylight-saving days don't bend it. The scale covers a window around a centre date and re-centres as you scroll. Dragging a repeat's later occurrence moves the whole series; dragging a dated checklist line rewrites its `@date`.
+
 - **Time scale.** Zoom levels are hour, day, week, month, quarter and year. Each maps to pixels per unit and a tick generator, with labels from `Intl.DateTimeFormat`, so locale and week start come for free.
 - **Queries** are range queries on the `when.start`, `due.start` or `createdAt` indexes, for the visible window plus a buffer. The plotting basis is chosen in the toolbar.
 - **Placement.** Each item becomes an interval `[start, end]`; point items get a minimum width. Its lane key comes from the lane mode: group, tag, kind or colour.
@@ -320,6 +324,8 @@ How strokes are drawn:
 - **Query syntax:** free text plus filters: `tag:`, `in:<group>`, `kind:`, `colour:`, `due:<date`, `is:open`, `has:ink`. The filter chips in the UI write the same syntax, so power users can type it.
 
 ## 12. Reminders and notifications (honest limits)
+
+> Built in Phase 2: `features/reminders/`. A timer is set for the next reminder and re-set on every data change (a Dexie live query). Reminders more than two minutes late when the app starts go to "While you were away" instead of firing. `public/sw-notifications.js` is imported into the generated service worker to open the item when a notification is clicked. The app-icon badge counts overdue items where `setAppBadge` exists. `lib/ics.ts` writes RFC 5545 files with repeats and alarms.
 
 A static web app can't reliably fire a notification at an exact time while it's closed:
 

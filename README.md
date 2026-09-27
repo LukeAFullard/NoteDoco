@@ -12,7 +12,8 @@ v2 is being rebuilt from the plan in [`PROJECT_PLAN.md`](PROJECT_PLAN.md).
 
 - **Phase 0 (foundation) is in place:** design system, data layer, app shell, installable PWA, the ink lab, and the editor spike.
 - **Phase 1 (notes, stickies and groups) is built:** the formatted note editor, sticky wall, groups with drag and drop, tags, search, history, trash, backup/restore, Markdown import/export, and automatic import of v1 notes.
-- **Next:** switch the live site to v2 (milestone M1), then Phase 2: Today, the timeline with groups side by side, and the calendar.
+- **Phase 2 (time and side by side) is built:** dates, due dates, repeats and reminders on any item; Today, Tasks, the timeline (lanes by group, tag, kind or colour, from hours to years), the calendar, add-to-calendar (.ics), split view and groups side by side.
+- **Next:** switch the live site to v2 (milestone M1), then Phase 3: handwriting (after the iPad ink tests).
 
 ## Documents
 - [`PROJECT_PLAN.md`](PROJECT_PLAN.md): features, screens and roadmap
