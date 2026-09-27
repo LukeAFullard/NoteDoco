@@ -28,7 +28,11 @@ test.describe('calendar', () => {
     await expect(later).toBeFocused();
     await expect(page.locator(`[data-cal-day="${localDate(2)}"]`).getByRole('button', { name: /^Dentist/ })).toBeVisible();
 
-    // Drag it back to tomorrow's cell.
+    // Drag it back to tomorrow's cell (both on screen, toasts out of the way).
+    const dismiss = page.getByRole('status').getByRole('button', { name: 'Dismiss' });
+    while ((await dismiss.count()) > 0) await dismiss.first().click();
+    await page.locator(`[data-cal-day="${localDate(1)}"]`).scrollIntoViewIfNeeded();
+    await later.scrollIntoViewIfNeeded();
     const from = (await later.boundingBox())!;
     const to = (await page.locator(`[data-cal-day="${localDate(1)}"]`).boundingBox())!;
     await page.mouse.move(from.x + 10, from.y + 5);
@@ -42,6 +46,8 @@ test.describe('calendar', () => {
     await add(page, 'Call Sam tomorrow 10am');
     await page.goto(`/#/calendar?view=week&date=${localDate(1)}`);
     const item = page.getByRole('button', { name: /^Call Sam, 10:00/ });
+    // Show 9:00 to the afternoon, whatever time the test runs.
+    await page.getByRole('region', { name: 'Times of day' }).evaluate((el) => (el.scrollTop = 9 * 48));
     await expect(item).toBeVisible();
     const box = (await item.boundingBox())!;
     await page.mouse.move(box.x + 10, box.y + 5);
@@ -61,6 +67,24 @@ test.describe('calendar', () => {
     await page.getByRole('button', { name: 'Done' }).click();
     await expect(page.getByRole('button', { name: /^Gym, 2:00/ })).toBeVisible();
   });
+});
+
+test('a dated checklist line shows on the calendar and moves by rewriting its date', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'desktop calendar');
+  await page.goto('/#/new/note');
+  const editor = page.getByRole('textbox', { name: 'Note', exact: true });
+  await expect(editor).toBeFocused();
+  await page.keyboard.type('Launch');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('[ ] send invites @tomorrow ');
+  await expect(page.getByText('Saved', { exact: false })).toBeVisible();
+  await page.goto(`/#/calendar?view=month&date=${localDate(1)}`);
+  const chip = page.locator(`[data-cal-day="${localDate(1)}"]`).getByRole('button', { name: /^send invites/ });
+  await chip.focus();
+  await page.keyboard.press('Alt+ArrowRight');
+  await expect(page.locator(`[data-cal-day="${localDate(2)}"]`).getByRole('button', { name: /^send invites/ })).toBeVisible();
+  await page.goto('/#/tasks');
+  await expect(page.getByRole('region', { name: /^(This week|Later)$/ }).getByRole('checkbox', { name: /send invites/ })).toBeVisible();
 });
 
 test('phone calendar: month dots and the chosen day’s list', async ({ page, isMobile }) => {

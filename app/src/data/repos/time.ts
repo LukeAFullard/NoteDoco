@@ -4,7 +4,8 @@ import type { Id, Item, LocalDate, Reminder } from '../types';
 import { duplicateItem, setBodyText } from './items';
 import { nextOccurrence, parseRule } from '@/lib/recurrence';
 import { diffDays, itemSpan, shiftSpan, spanDays, todayLocal } from '@/lib/time';
-import { resetChecklist, toggleChecklistItem } from '@/lib/textInfo';
+import { checklistLines, resetChecklist, toggleChecklistItem } from '@/lib/textInfo';
+import { MENTION } from '@/lib/dateMentions';
 import { nowIso } from '@/lib/ids';
 
 /** The text body of a note or sticky, or null for kinds without one. */
@@ -20,6 +21,30 @@ export async function toggleChecklistLine(itemId: Id, index: number): Promise<vo
   const text = await getBodyText(itemId);
   if (text === null) return;
   await setBodyText(itemId, toggleChecklistItem(text, index));
+}
+
+/**
+ * Changes the date on one checklist line (0-based among checklist lines): its first @date is
+ * rewritten, or one is added at the end. `date` is a LocalDate or "2026-10-02T15:00".
+ */
+export async function setChecklistLineDate(itemId: Id, index: number, date: string): Promise<void> {
+  const text = await getBodyText(itemId);
+  if (text === null || index >= checklistLines(text).length) return;
+  let n = -1;
+  let inFence = false;
+  const next = text
+    .split('\n')
+    .map((line) => {
+      if (/^\s*(```|~~~)/.test(line)) inFence = !inFence;
+      if (inFence || !/^\s*[-*+]\s+\[( |x|X)\]\s/.test(line)) return line;
+      n++;
+      if (n !== index) return line;
+      MENTION.lastIndex = 0;
+      const replaced = line.replace(new RegExp(MENTION.source), (_m, lead: string) => `${lead}@${date}`);
+      return replaced !== line ? replaced : `${line.trimEnd()} @${date}`;
+    })
+    .join('\n');
+  if (next !== text) await setBodyText(itemId, next);
 }
 
 const shiftReminders = (rs: Reminder[], days: number): Reminder[] =>

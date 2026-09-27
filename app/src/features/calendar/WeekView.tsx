@@ -1,3 +1,4 @@
+import { placedKey } from '@/data/agenda';
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/design/cn';
 import { formatLongDay, formatSpanTime, formatTime, todayLocal } from '@/lib/time';
@@ -65,7 +66,7 @@ export function WeekView({ anchor, weekStart, placed, open, drag, onKeyMove, onC
           <ItemDropZone key={d} onDropItems={(ids) => onDropItems(ids, d)} data-cal-day={d} onDoubleClick={(e) => e.target === e.currentTarget && onCreate(d, null)} className="flex min-h-9 min-w-0 flex-1 flex-col gap-0.5 border-l border-border p-0.5">
             {allDay.get(d)!.map((p) => (
               <CalendarChip
-                key={`${p.item.id}@${p.span.start}`}
+                key={placedKey(p)}
                 placed={p}
                 showTime={false}
                 onOpen={() => !drag.justDragged() && open(p.item)}
@@ -89,7 +90,7 @@ export function WeekView({ anchor, weekStart, placed, open, drag, onKeyMove, onC
           {days.map((d) => {
             const entries: Entry[] = timed.get(d)!.map((p) => {
               const [a, b] = dayExtent(p.span, d);
-              return { key: `${p.item.id}@${p.span.start}`, placed: p, lane: d, a, b };
+              return { key: placedKey(p), placed: p, lane: d, a, b };
             });
             const packed = packLane(entries, 4, 0, 30);
             const cols = Math.max(1, packed.rows - (packed.clusters.length ? 1 : 0));
@@ -139,7 +140,7 @@ export function WeekView({ anchor, weekStart, placed, open, drag, onKeyMove, onC
                         <span className={cn('w-full truncate font-medium', p.item.task?.done && !p.projected && 'line-through opacity-60')}>{itemTitle(p.item.title, p.item.kind)}</span>
                         <span className="truncate opacity-80">{formatSpanTime(p.span)}</span>
                       </button>
-                      {!p.projected && (
+                      {!p.projected && !p.line && (
                         <span
                           aria-hidden
                           className="absolute inset-x-0 bottom-0 h-1.5 cursor-ns-resize"

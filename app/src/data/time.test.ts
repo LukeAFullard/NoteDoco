@@ -1,8 +1,9 @@
 import { db } from './db';
 import { freshDb } from '@/test/db';
 import { createItem, setBodyText } from './repos/items';
-import { applySpanChange, completeWithUndo, dateItemsWithUndo, rescheduleWithUndo, setTimeWithUndo, toggleChecklistLineWithUndo } from './actions';
+import { applySpanChange, completeWithUndo, dateItemsWithUndo, moveChecklistLineWithUndo, reschedulePlacedWithUndo, rescheduleWithUndo, setTimeWithUndo, toggleChecklistLineWithUndo } from './actions';
 import { undo } from './undo';
+import { placedBetween } from './agenda';
 import { allDaySpan, timedSpan, todayLocal, addDays } from '@/lib/time';
 
 beforeEach(freshDb);
@@ -110,4 +111,18 @@ it('dates dropped items: dated ones keep their time, undated ones get the day', 
   expect((await db.items.get(undated))!.when).toEqual(allDaySpan('2026-10-05'));
   await undo();
   expect((await db.items.get(undated))!.when).toBeNull();
+});
+
+it('moves a dated checklist line by rewriting its @date, undoably', async () => {
+  const id = await createItem({ kind: 'note', text: 'Plan\n- [ ] book venue @2026-10-02 soon\n- [ ] invite' });
+  const [placed] = await placedBetween('2026-10-01', '2026-10-03', { lines: true });
+  expect(placed!.line!.text).toBe('book venue @2026-10-02 soon');
+  expect(placed!.item.title).toBe('book venue soon');
+  await reschedulePlacedWithUndo(placed!, placed!.span, allDaySpan('2026-10-05'));
+  expect((await db.noteBodies.get(id))!.text).toBe('Plan\n- [ ] book venue @2026-10-05 soon\n- [ ] invite');
+  await undo();
+  expect((await db.noteBodies.get(id))!.text).toContain('@2026-10-02');
+  // A line without a date gets one at the end; a time can be set too.
+  await moveChecklistLineWithUndo(id, 1, '2026-10-06T15:30');
+  expect((await db.noteBodies.get(id))!.text).toContain('- [ ] invite @2026-10-06T15:30');
 });

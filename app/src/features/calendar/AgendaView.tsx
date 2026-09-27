@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ChevronDown } from 'lucide-react';
-import { placedBetween, taskLines, type Placed, type TaskLine } from '@/data/agenda';
+import { placedKey, placedBetween, taskLines, type Placed, type TaskLine } from '@/data/agenda';
 import type { LocalDate } from '@/data/types';
 import { Button } from '@/design/Button';
 import { cn } from '@/design/cn';
@@ -51,7 +51,7 @@ export function AgendaView({ anchor, groups, onCreate }: Pick<CalendarViewProps,
               </h2>
               <ul>
                 {placed.map((p) => (
-                  <AgendaItemRow key={`${p.item.id}@${p.span.start}`} entry={p} groups={groups} />
+                  <AgendaItemRow key={placedKey(p)} entry={p} groups={groups} />
                 ))}
                 {lines.map((l) => (
                   <TaskLineRow key={l.ref.id} line={l} groups={groups} />

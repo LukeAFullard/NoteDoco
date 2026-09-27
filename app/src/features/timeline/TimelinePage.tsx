@@ -134,7 +134,7 @@ export function TimelinePage() {
   const [picking, setPicking] = useState(false);
   useEffect(() => setCurrentGroup(null), []);
 
-  const loaded = useLiveQuery(() => (win ? placedBetween(win.from, win.to, { undated }) : Promise.resolve(null)), [win?.from, win?.to, undated]);
+  const loaded = useLiveQuery(() => (win ? placedBetween(win.from, win.to, { undated, lines: true }) : Promise.resolve(null)), [win?.from, win?.to, undated]);
   // useLiveQuery keeps the previous result while a new window loads, so nothing flickers.
   const placed = loaded ?? [];
 

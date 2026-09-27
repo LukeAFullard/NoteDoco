@@ -5,7 +5,7 @@ import { db } from './db';
 import { touched } from './meta';
 import type { Id, Item, LocalDate, TimeSpan } from './types';
 import type { ColourKey } from '@/lib/palette';
-import { completeItem, getBodyText, reopenItem, toggleChecklistLine, type CompleteResult } from './repos/time';
+import { completeItem, getBodyText, reopenItem, setChecklistLineDate, toggleChecklistLine, type CompleteResult } from './repos/time';
 import { setBodyText } from './repos/items';
 import { addDays, allDaySpan, diffDays, formatDay, formatSpan, shiftSpan, spanDays, spanStart } from '@/lib/time';
 
@@ -247,4 +247,36 @@ export async function dateItemsWithUndo(ids: Id[], day: LocalDate, extra: Partia
   const label = `${items.length === 1 ? 'Moved' : `Moved ${items.length} items`} to ${formatDay(day)}`;
   recordUndo({ label, undo: () => restoreFields(before), redo: apply });
   return label;
+}
+
+/** Moves a dated checklist line to another date by rewriting its @date (NOTE-9). Undoable. */
+export async function moveChecklistLineWithUndo(itemId: Id, index: number, date: string): Promise<string> {
+  const before = await getBodyText(itemId);
+  await setChecklistLineDate(itemId, index, date);
+  const label = `Moved to ${formatDay(date.slice(0, 10))}`;
+  recordUndo({
+    label,
+    undo: async () => {
+      if (before !== null) await setBodyText(itemId, before);
+    },
+    redo: () => setChecklistLineDate(itemId, index, date),
+  });
+  return label;
+}
+
+/**
+ * Reschedules any timeline or calendar entry: an item (with its repeat series), or a dated
+ * checklist line, whose @date is rewritten (lines keep their group and colour).
+ */
+export async function reschedulePlacedWithUndo(
+  placed: { item: Item; basis: 'when' | 'due' | 'created'; line?: { itemId: Id; anchor: string } },
+  from: TimeSpan,
+  to: TimeSpan,
+  extra: Partial<Pick<Item, 'groupId' | 'colour'>> = {},
+): Promise<string> {
+  if (!placed.line) return rescheduleWithUndo(placed.item, placed.basis, from, to, extra);
+  const d = spanStart(to);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const day = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  return moveChecklistLineWithUndo(placed.line.itemId, Number(placed.line.anchor), to.allDay ? to.start : `${day}T${pad(d.getHours())}:${pad(d.getMinutes())}`);
 }

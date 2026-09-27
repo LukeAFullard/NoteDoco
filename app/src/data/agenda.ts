@@ -2,7 +2,7 @@ import { db } from './db';
 import type { Item, LocalDate, TaskRef, TimeSpan } from './types';
 import { addDays, diffDays, isDone, isOverdue, itemSpan, shiftSpan, spanDays, spanStart, todayLocal } from '@/lib/time';
 import { occurrencesBetween, parseRule } from '@/lib/recurrence';
-import { mentionDay } from '@/lib/dateMentions';
+import { mentionDay, stripMentions } from '@/lib/dateMentions';
 
 /**
  * Date queries shared by Today, Tasks, the timeline and the calendar (ARCHITECTURE §10).
@@ -18,7 +18,15 @@ export interface Placed {
   projected: boolean;
   /** Why it's here: its date, its due date, or (undated items, when asked) its created date. */
   basis: 'when' | 'due' | 'created';
+  /**
+   * Set for a dated checklist line (NOTE-9): `item` is then its note or sticky, with the
+   * line's text as the title and its tick as the to-do state.
+   */
+  line?: TaskRef;
 }
+
+/** A stable key for an entry (an item can appear several times: repeats, checklist lines). */
+export const placedKey = (p: Placed) => (p.line ? `line:${p.line.id}` : `${p.item.id}@${p.span.start}`);
 
 /** How far back to look for long spans that started before the window. */
 const LOOKBACK_DAYS = 62;
@@ -36,11 +44,13 @@ export interface PlacedOptions {
   includeArchived?: boolean;
   /** Expand repeats into their future occurrences (default true). */
   repeats?: boolean;
+  /** Include dated checklist lines (NOTE-9). */
+  lines?: boolean;
 }
 
 /** Everything dated within [from, to] (inclusive local dates), with repeats expanded. */
 export async function placedBetween(from: LocalDate, to: LocalDate, opts: PlacedOptions = {}): Promise<Placed[]> {
-  const { undated = false, includeArchived = false, repeats = true } = opts;
+  const { undated = false, includeArchived = false, repeats = true, lines = false } = opts;
   // Keys mix LocalDates and UTC instants, so widen by a day on each side and filter exactly.
   const lo = addDays(from, -LOOKBACK_DAYS);
   const hi = `${addDays(to, 1)}￿`;
@@ -91,6 +101,15 @@ export async function placedBetween(from: LocalDate, to: LocalDate, opts: Placed
       if (!live(item, includeArchived) || item.when || item.due) continue;
       const span: TimeSpan = { start: item.createdAt, end: null, allDay: false, tz: null };
       if (overlaps(span, from, to)) push({ item, span, projected: false, basis: 'created' });
+    }
+  }
+
+  if (lines) {
+    for (const l of await taskLines({ from, to })) {
+      const date = l.ref.date!;
+      const span: TimeSpan = date.length > 10 ? { start: date, end: null, allDay: false, tz: null } : { start: date, end: null, allDay: true, tz: null };
+      const item: Item = { ...l.item, title: stripMentions(l.ref.text) || 'Checklist item', task: { done: l.ref.done, doneAt: null }, recurrence: null, reminders: [], due: null, when: span };
+      out.push({ item, span, projected: false, basis: 'when', line: l.ref });
     }
   }
 

@@ -72,7 +72,19 @@ export function AgendaItemRow({ entry, groups, showDate = false, time = true }: 
       onDragStart={(e) => setDragItems(e, [item.id])}
     >
       {time && <span className="hidden w-16 shrink-0 pt-0.5 text-right font-mono text-xs text-muted sm:block">{entry.basis === 'due' ? 'Due' : span.allDay ? '' : formatSpanTime(span)}</span>}
-      {item.task && !projected ? <DoneToggle item={item} className="mt-0.5" /> : <KindMark item={item} />}
+      {entry.line ? (
+        <CheckControl
+          shape="square"
+          checked={entry.line.done}
+          label={item.title}
+          className="mt-0.5"
+          onToggle={async () => toastWithUndo(await toggleChecklistLineWithUndo(entry.line!.itemId, Number(entry.line!.anchor), entry.line!.done))}
+        />
+      ) : item.task && !projected ? (
+        <DoneToggle item={item} className="mt-0.5" />
+      ) : (
+        <KindMark item={item} />
+      )}
       <div className="min-w-0 flex-1">
         <ItemLink item={item} className={cn('block truncate font-medium', done && 'text-muted line-through', projected && 'text-muted')} />
         <div className="flex min-w-0 flex-wrap items-center gap-x-3 text-xs text-muted">

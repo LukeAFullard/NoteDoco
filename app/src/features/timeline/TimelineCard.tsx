@@ -80,7 +80,7 @@ export const TimelineCard = forwardRef<HTMLDivElement, TimelineCardProps>(functi
           {formatSpan(span)}
         </span>
       )}
-      {detail === 'card' && onPointerDown && placed.basis !== 'created' && (
+      {detail === 'card' && onPointerDown && placed.basis !== 'created' && !placed.line && (
         <>
           <span aria-hidden className={cn(handle, horizontal ? 'left-0' : 'top-0')} onPointerDown={(e) => (e.stopPropagation(), onPointerDown(e, 'start'))} />
           <span aria-hidden className={cn(handle, horizontal ? 'right-0' : 'bottom-0')} onPointerDown={(e) => (e.stopPropagation(), onPointerDown(e, 'end'))} />

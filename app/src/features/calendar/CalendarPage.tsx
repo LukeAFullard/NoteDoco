@@ -9,7 +9,7 @@ import { toastWithUndo } from '@/app/undoActions';
 import { Button, IconButton } from '@/design/Button';
 import { cn } from '@/design/cn';
 import { placedBetween, type Placed } from '@/data/agenda';
-import { dateItemsWithUndo, rescheduleWithUndo } from '@/data/actions';
+import { dateItemsWithUndo, reschedulePlacedWithUndo } from '@/data/actions';
 import { useGroups } from '@/data/hooks';
 import { createItem } from '@/data/repos/items';
 import type { Group, Item, LocalDate, TimeSpan } from '@/data/types';
@@ -66,7 +66,7 @@ export function CalendarPage() {
   useEffect(() => setCurrentGroup(null), []);
 
   const range = view === 'month' ? monthGrid(anchor, weekStart) : weekDays(anchor, weekStart);
-  const loaded = useLiveQuery(() => (view === 'agenda' ? Promise.resolve([]) : placedBetween(range[0]!, range.at(-1)!)), [view, range[0]]);
+  const loaded = useLiveQuery(() => (view === 'agenda' ? Promise.resolve([]) : placedBetween(range[0]!, range.at(-1)!, { lines: true })), [view, range[0]]);
   const placed = loaded ?? NONE;
 
   // After a keyboard move the entry is re-drawn; put focus back on it.
@@ -95,7 +95,7 @@ export function CalendarPage() {
 
   const reschedule = async (p: Placed, next: TimeSpan) => {
     if (JSON.stringify(next) === JSON.stringify(p.span)) return;
-    toastWithUndo(await rescheduleWithUndo(p.item, p.basis, p.span, next));
+    toastWithUndo(await reschedulePlacedWithUndo(p, p.span, next));
   };
 
   const onDrop = async ({ placed: p, fromDay, kind, grabMinutes }: CalendarDragStart, to: CalendarDrop) => {

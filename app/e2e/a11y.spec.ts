@@ -12,6 +12,7 @@ for (const theme of ['dark', 'light'] as const) {
     });
 
     test('main screens have no serious or critical issues', async ({ page }) => {
+      test.setTimeout(120_000); // one axe scan per screen
       // Some content, so lists and cards are checked too.
       await page.goto('/#/inbox');
       await page.keyboard.press('s');

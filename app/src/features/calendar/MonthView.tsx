@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Plus } from 'lucide-react';
-import type { Placed } from '@/data/agenda';
+import { placedKey, type Placed } from '@/data/agenda';
 import type { Group, Item, LocalDate } from '@/data/types';
 import { cn } from '@/design/cn';
 import { formatLongDay, todayLocal } from '@/lib/time';
@@ -81,7 +81,7 @@ export function MonthView({ anchor, weekStart, placed, groups, open, drag, onKey
           {list.length ? (
             <ul>
               {list.map((p) => (
-                <AgendaItemRow key={`${p.item.id}@${p.span.start}`} entry={p} groups={groups} />
+                <AgendaItemRow key={placedKey(p)} entry={p} groups={groups} />
               ))}
             </ul>
           ) : (
@@ -140,7 +140,7 @@ export function MonthView({ anchor, weekStart, placed, groups, open, drag, onKey
                   </div>
                   {list.slice(0, MAX_CHIPS).map((p) => (
                     <CalendarChip
-                      key={`${p.item.id}@${p.span.start}`}
+                      key={placedKey(p)}
                       placed={p}
                       onOpen={() => !drag.justDragged() && open(p.item)}
                       dimmed={drag.dragging?.placed === p}

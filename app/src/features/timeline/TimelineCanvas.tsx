@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { ChevronDown, ChevronRight, Plus } from 'lucide-react';
-import type { Placed } from '@/data/agenda';
+import { placedKey, type Placed } from '@/data/agenda';
 import type { Item, LocalDate, TimeSpan } from '@/data/types';
 import { createItem } from '@/data/repos/items';
-import { dateItemsWithUndo, rescheduleWithUndo, trashItemsWithUndo } from '@/data/actions';
+import { dateItemsWithUndo, reschedulePlacedWithUndo, rescheduleWithUndo, trashItemsWithUndo } from '@/data/actions';
 import { dragKind, readDragItems } from '@/lib/dnd';
 import { toastWithUndo } from '@/app/undoActions';
 import { cn } from '@/design/cn';
@@ -92,7 +92,7 @@ export function TimelineCanvas({ placed, lanes, onWindow }: { placed: Placed[]; 
       for (const lane of laneKeysFor(p.item, laneMode)) {
         const list = byLane.get(lane);
         if (!list) continue;
-        const e: Entry = { key: `${p.item.id}@${p.span.start}@${lane}`, placed: p, lane, a, b: Math.max(b, a + (size ? size.min[o] : 2)) };
+        const e: Entry = { key: `${placedKey(p)}@${lane}`, placed: p, lane, a, b: Math.max(b, a + (size ? size.min[o] : 2)) };
         list.push(e);
         all.push(e);
       }
@@ -254,7 +254,7 @@ export function TimelineCanvas({ placed, lanes, onWindow }: { placed: Placed[]; 
       const laneMoved = drag.lane && drag.lane !== entry.lane ? laneChange(laneMode, drag.lane) : {};
       if (JSON.stringify(to) === JSON.stringify(entry.placed.span) && !Object.keys(laneMoved).length) return;
       pendingFocus.current = { id: entry.placed.item.id, focus: false };
-      toastWithUndo(await rescheduleWithUndo(entry.placed.item, entry.placed.basis, entry.placed.span, to, laneMoved));
+      toastWithUndo(await reschedulePlacedWithUndo(entry.placed, entry.placed.span, to, entry.placed.line ? {} : laneMoved));
     };
     const cancel = (e: PointerEvent) => e.pointerId === drag.pointerId && setDrag(null);
     window.addEventListener('pointermove', move);
@@ -291,7 +291,7 @@ export function TimelineCanvas({ placed, lanes, onWindow }: { placed: Placed[]; 
       open(item);
       return;
     }
-    if (e.key === 'Delete' || e.key === 'Backspace') {
+    if ((e.key === 'Delete' || e.key === 'Backspace') && !entry.placed.line) {
       e.preventDefault();
       toastWithUndo(await trashItemsWithUndo([item.id]));
       return;
@@ -306,8 +306,8 @@ export function TimelineCanvas({ placed, lanes, onWindow }: { placed: Placed[]; 
         const px = (STEP_MINUTES[zoom] / 1440) * scale.pxPerDay * dir;
         const to = draggedSpan(entry.placed.span, 'move', px, scale);
         pendingFocus.current = { id: item.id, focus: true };
-        toastWithUndo(await rescheduleWithUndo(item, entry.placed.basis, entry.placed.span, to));
-      } else if (canChangeLane(laneMode)) {
+        toastWithUndo(await reschedulePlacedWithUndo(entry.placed, entry.placed.span, to));
+      } else if (canChangeLane(laneMode) && !entry.placed.line) {
         const i = laneOrder.indexOf(entry.lane) + (e.key === laneNext ? 1 : -1);
         const lane = laneOrder[i];
         if (!lane) return;

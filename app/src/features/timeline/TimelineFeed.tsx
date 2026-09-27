@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type TouchEvent } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import { placedBetween, type Placed } from '@/data/agenda';
+import { placedKey, placedBetween, type Placed } from '@/data/agenda';
 import type { Group, LocalDate } from '@/data/types';
 import { Button } from '@/design/Button';
 import { cn } from '@/design/cn';
@@ -89,7 +89,7 @@ export function TimelineFeed({ lanes, groups }: { lanes: Lane[]; groups: Map<str
               {entries.length ? (
                 <ul>
                   {entries.map((p) => (
-                    <AgendaItemRow key={`${p.item.id}@${p.span.start}`} entry={p} groups={groups} />
+                    <AgendaItemRow key={placedKey(p)} entry={p} groups={groups} />
                   ))}
                 </ul>
               ) : (
