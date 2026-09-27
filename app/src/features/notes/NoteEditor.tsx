@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
 import type { Editor } from '@tiptap/core';
-import { Code2, History, Maximize2, Minimize2, Search, Type } from 'lucide-react';
+import { CalendarClock, Code2, History, Maximize2, Minimize2, Search, Type } from 'lucide-react';
 import { db } from '@/data/db';
 import { setBodyText } from '@/data/repos/items';
 import { addAttachment, attachmentIdFromUrl, objectUrlFor } from '@/data/repos/attachments';
@@ -11,7 +11,10 @@ import { Menu, MenuItem } from '@/design/Menu';
 import { cn } from '@/design/cn';
 import { useDebouncedSave } from '@/lib/useDebouncedSave';
 import { useKeyboardInset } from '@/lib/useKeyboardInset';
-import { useUi } from '@/app/ui';
+import { openDateDialog, useUi } from '@/app/ui';
+import { useIsActivePane } from '@/app/paneContext';
+import { resolveDateMentions } from '@/lib/dateMentions';
+import { DateBadge, DoneToggle } from '@/features/time/DateBadge';
 import { noteExtensions } from './editor/extensions';
 import { Toolbar } from './editor/Toolbar';
 import { FindBar } from './editor/FindBar';
@@ -19,6 +22,7 @@ import { INSERT_IMAGE_EVENT } from './editor/slashCommands';
 import { TagEditor } from '@/features/tags/TagEditor';
 import { SNAPSHOT_INTERVAL_MS, snapshotNote } from '@/data/repos/versions';
 import { HistoryDialog } from './HistoryDialog';
+import { OPEN_HISTORY_EVENT } from '@/features/items/events';
 
 type Mode = 'rich' | 'source';
 type SaveState = 'saved' | 'saving';
@@ -128,8 +132,15 @@ function PlainEditor({ text, onChange, mono, label }: { text: string; onChange: 
         autoFocus={!text}
         spellCheck
         onChange={(e) => {
-          setValue(e.target.value);
-          onChange(e.target.value);
+          // "@fri " becomes "@2026-10-02 " as you type; keep the caret where it was.
+          const el = e.target;
+          const next = resolveDateMentions(el.value);
+          if (next !== el.value) {
+            const caret = el.selectionStart + (next.length - el.value.length);
+            requestAnimationFrame(() => el.setSelectionRange(caret, caret));
+          }
+          setValue(next);
+          onChange(next);
         }}
         placeholder="Write here. The first line becomes the title."
         className={cn(
@@ -150,6 +161,7 @@ export function NoteEditor({ item }: { item: Item }) {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const focusMode = useUi((s) => s.focusMode);
+  const isActive = useIsActivePane();
   const latest = useRef<string | null>(null);
 
   // Load the body once per note. Later changes come from this editor, so we don't live-reload
@@ -212,6 +224,7 @@ export function NoteEditor({ item }: { item: Item }) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (!isActive()) return;
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f' && body?.format === 'markdown' && mode === 'rich') {
         e.preventDefault();
         setFindOpen(true);
@@ -220,9 +233,19 @@ export function NoteEditor({ item }: { item: Item }) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [body?.format, mode]);
+  }, [body?.format, mode, isActive]);
 
   useEffect(() => () => useUi.setState({ focusMode: false }), []);
+
+  // The inspector's "Version history" button.
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      if ((e as CustomEvent<string>).detail !== item.id) return;
+      void flush().then(() => setHistoryOpen(true));
+    };
+    window.addEventListener(OPEN_HISTORY_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_HISTORY_EVENT, onOpen);
+  }, [item.id, flush]);
 
   if (!body) return null;
   const plain = body.format === 'plain';
@@ -255,8 +278,19 @@ export function NoteEditor({ item }: { item: Item }) {
         </IconButton>
       </div>
       {!focusMode && (
-        <div className="border-b border-border px-4 py-1.5">
-          <TagEditor item={item} />
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-border px-4 py-1.5">
+          <DoneToggle item={item} />
+          <button
+            type="button"
+            onClick={() => openDateDialog([item.id])}
+            className="flex items-center gap-1.5 rounded text-sm text-muted outline-none hover:text-text focus-visible:ring-2 focus-visible:ring-focus"
+          >
+            <CalendarClock size={15} aria-hidden />
+            {item.when || item.due ? <DateBadge item={item} /> : <span>Add date</span>}
+          </button>
+          <div className="min-w-0 flex-1">
+            <TagEditor item={item} />
+          </div>
         </div>
       )}
       {plain ? (

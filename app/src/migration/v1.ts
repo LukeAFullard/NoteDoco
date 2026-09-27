@@ -1,4 +1,5 @@
 import { db } from '@/data/db';
+import { taskRefsFor } from '@/data/taskRefs';
 import { deviceId } from '@/data/device';
 import { encodeVersion } from '@/data/repos/versions';
 import { getSetting, setSetting } from '@/data/repos/settings';
@@ -95,7 +96,7 @@ export async function migrateFromV1(): Promise<MigrationReport> {
   report.found = true;
   const me = deviceId();
 
-  await db.transaction('rw', [db.groups, db.items, db.noteBodies, db.versions, db.attachments, db.settings], async () => {
+  await db.transaction('rw', [db.groups, db.items, db.noteBodies, db.taskRefs, db.versions, db.attachments, db.settings], async () => {
     // Groups: keep v1 ids; order siblings by creation time.
     const projects = [...v1.projects].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     const v2Groups = await db.groups.toArray();
@@ -153,6 +154,8 @@ export async function migrateFromV1(): Promise<MigrationReport> {
       const body: NoteBody = { itemId: n.id, format: 'markdown', text };
       await db.items.add(item);
       await db.noteBodies.add(body);
+      const refs = taskRefsFor(n.id, text);
+      if (refs.length) await db.taskRefs.bulkPut(refs);
       report.notes++;
     }
 

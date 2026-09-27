@@ -10,6 +10,7 @@ import { TaskItem, TaskList } from '@tiptap/extension-list';
 import { TableKit } from '@tiptap/extension-table';
 import Image from '@tiptap/extension-image';
 import { WikiLink } from '@/features/notes/editor/wikiLink';
+import { DateChip } from '@/features/notes/editor/dateChip';
 
 const CORPUS: Record<string, string> = {
   headings: '# Title\n\n## Section\n\n### Sub-section',
@@ -25,6 +26,7 @@ const CORPUS: Record<string, string> = {
   hardBreak: 'Line one  \nLine two',
   escapes: 'Literal \\*stars\\* and \\_underscores\\_ and 5 \\* 3',
   ourSyntax: 'Call Sam @2026-10-03 about #launch, see [[Launch plan]].',
+  datedTasks: '- [ ] dentist @2026-10-03T15:30\n- [x] book venue @2026-10-02',
   unicode: 'Café ☕ — naïve résumé 日本語 🎉',
   meeting:
     '# Standup 26 Sep\n\n**Attendees:** Pat, Sam\n\n## Actions\n\n- [ ] Sam: send the spec @fri\n- [x] Pat: book room\n\n> Decision: ship the beta on Friday.',
@@ -35,7 +37,7 @@ const CORPUS: Record<string, string> = {
 
 function makeEditor(md: string) {
   return new Editor({
-    extensions: [StarterKit, TaskList, TaskItem.configure({ nested: true }), TableKit, Image, WikiLink, Markdown],
+    extensions: [StarterKit, TaskList, TaskItem.configure({ nested: true }), TableKit, Image, WikiLink, DateChip, Markdown],
     content: md,
     contentType: 'markdown',
   });

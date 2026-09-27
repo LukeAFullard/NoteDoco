@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { FileText, Pin, PinOff, Trash2, ArrowUpRight } from 'lucide-react';
+import { CalendarClock, FileText, Pin, PinOff, Trash2, ArrowUpRight } from 'lucide-react';
 import { Dialog as AriaDialog, Modal, ModalOverlay } from 'react-aria-components';
 import { db } from '@/data/db';
 import { discardIfEmpty, setBodyText, setStickySize } from '@/data/repos/items';
@@ -14,6 +14,9 @@ import { useDebouncedSave } from '@/lib/useDebouncedSave';
 import { closeSticky, getRequestClose, setRequestClose, useStickyDialog } from './stickyDialog';
 import { linkedNote, promoteToNote } from './promote';
 import { TagEditor } from '@/features/tags/TagEditor';
+import { DateBadge } from '@/features/time/DateBadge';
+import { openDateDialog } from '@/app/ui';
+import { resolveDateMentions } from '@/lib/dateMentions';
 
 const SIZES = [
   { v: 'S', label: 'Small' },
@@ -37,6 +40,8 @@ function Editor({ id, fresh, initialText }: { id: string; fresh: boolean; initia
   const { schedule, flush } = useDebouncedSave((t: string) => setBodyText(id, t));
 
   const done = async () => {
+    const final = resolveDateMentions(text, new Date(), { final: true });
+    if (final !== text) schedule(final);
     await flush();
     closeSticky();
     if (fresh) await discardIfEmpty(id);
@@ -61,8 +66,16 @@ function Editor({ id, fresh, initialText }: { id: string; fresh: boolean; initia
           value={text}
           placeholder="Write something… (start a line with - [ ] for a checkbox)"
           onChange={(e) => {
-            setText(e.target.value);
-            schedule(e.target.value);
+            // "@fri " becomes "@2026-10-02 " as you type; keep the caret where it was.
+            const el = e.target;
+            const raw = el.value;
+            const next = resolveDateMentions(raw);
+            if (next !== raw) {
+              const caret = el.selectionStart + (next.length - raw.length);
+              requestAnimationFrame(() => el.setSelectionRange(caret, caret));
+            }
+            setText(next);
+            schedule(next);
           }}
           onKeyDown={(e) => {
             if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') void done();
@@ -71,8 +84,19 @@ function Editor({ id, fresh, initialText }: { id: string; fresh: boolean; initia
           style={{ fontFamily: 'var(--sticky-font)' }}
         />
       </div>
-      <div className="w-full max-w-sm rounded-panel bg-surface px-3 py-2">
+      <div className="w-full max-w-sm space-y-1.5 rounded-panel bg-surface px-3 py-2">
         <TagEditor item={item} />
+        <button
+          type="button"
+          onClick={async () => {
+            await flush();
+            openDateDialog([id]);
+          }}
+          className="flex items-center gap-1.5 rounded text-sm text-muted outline-none hover:text-text focus-visible:ring-2 focus-visible:ring-focus"
+        >
+          <CalendarClock size={15} aria-hidden />
+          {item.when || item.due ? <DateBadge item={item} /> : 'Add a date or reminder'}
+        </button>
       </div>
       <ColourSwatches label="Sticky colour" value={colour} onChange={(c) => void setColourWithUndo([id], c)} />
       <div className="flex w-full max-w-md flex-wrap items-center justify-center gap-2">

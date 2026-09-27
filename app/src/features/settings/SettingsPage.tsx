@@ -10,6 +10,7 @@ import { setPrefs, usePrefs, type Prefs } from '@/app/prefs';
 import { Switch } from '@/design/Switch';
 import { useUi } from '@/app/ui';
 import { DataSection } from './DataSection';
+import { RemindersSettings } from '@/features/reminders/RemindersSettings';
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -126,8 +127,11 @@ export function SettingsPage() {
           </Switch>
         </div>
       </Section>
-      <Section title="Dates">
-        <Choice label="Week starts on" prefKey="weekStart" options={[{ value: 'auto', label: 'Automatic' }, { value: 'monday', label: 'Monday' }, { value: 'sunday', label: 'Sunday' }]} />
+      <Section title="Dates & reminders">
+        <div className="space-y-4">
+          <Choice label="Week starts on" prefKey="weekStart" options={[{ value: 'auto', label: 'Automatic' }, { value: 'monday', label: 'Monday' }, { value: 'sunday', label: 'Sunday' }]} />
+          <RemindersSettings />
+        </div>
       </Section>
       <Section title="Backup & import">
         <DataSection />

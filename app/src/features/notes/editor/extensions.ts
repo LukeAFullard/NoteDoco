@@ -19,6 +19,7 @@ import { WikiLink } from './wikiLink';
 import { AttachmentImage } from './attachmentImage';
 import { SearchReplace } from './searchReplace';
 import { SlashExtension } from './slashExtension';
+import { DateChip } from './dateChip';
 
 // A handful of common languages keeps the editor download small (the full set is ~5× larger).
 const lowlight = createLowlight({ bash, css, javascript, json, markdown, python, sql, typescript, xml, yaml });
@@ -44,6 +45,7 @@ export function noteExtensions() {
     WikiLink,
     SearchReplace,
     SlashExtension,
+    DateChip,
     Placeholder.configure({
       placeholder: ({ node, pos }) => (pos === 0 && node.type.name === 'heading' ? 'Title' : pos === 0 ? 'Start with a title… (type / for blocks)' : 'Type / for headings, checklists, tables…'),
     }),

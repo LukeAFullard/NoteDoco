@@ -5,7 +5,8 @@ import { Archive, ArchiveRestore, FolderInput, FolderOpen, FolderPlus, MoreHoriz
 import { Menu as AriaMenu, Popover, SubmenuTrigger } from 'react-aria-components';
 import { db } from '@/data/db';
 import { updateGroup } from '@/data/repos/groups';
-import { archiveGroupWithUndo, moveGroupWithUndo, trashGroupWithUndo } from '@/data/actions';
+import { archiveGroupWithUndo, moveGroupWithUndo, moveItemsWithUndo, trashGroupWithUndo } from '@/data/actions';
+import { ItemDropZone } from '@/features/items/DropZone';
 import { showToast } from '@/design/toast';
 import { useGroups, useItems } from '@/data/hooks';
 import { Pane } from '@/app/Pane';
@@ -123,22 +124,31 @@ export function GroupPage() {
         </nav>
       )}
       {items && (
-        <ItemCollection
-          items={items.filter((i) => !i.archived)}
-          prefs={prefs}
-          empty={
-            <EmptyState
-              icon={<FolderOpen size={32} />}
-              title={`Nothing in ${group.name} yet`}
-              body="Add a note or a sticky, or paste text or images here. Drag things from other groups onto this one in the sidebar."
-              action={
-                <span className="flex gap-2 text-sm text-muted">
-                  <Kbd>N</Kbd> note <Kbd>S</Kbd> sticky
-                </span>
-              }
-            />
-          }
-        />
+        // Items dragged here from another pane or the columns view move into this group (WS-2).
+        <ItemDropZone
+          className="min-h-[calc(100%-1px)]"
+          onDropItems={async (ids) => {
+            const moving = ids.filter((id) => !items.some((i) => i.id === id));
+            if (moving.length) toastWithUndo(await moveItemsWithUndo(moving, group.id));
+          }}
+        >
+          <ItemCollection
+            items={items.filter((i) => !i.archived)}
+            prefs={prefs}
+            empty={
+              <EmptyState
+                icon={<FolderOpen size={32} />}
+                title={`Nothing in ${group.name} yet`}
+                body="Add a note or a sticky, or paste text or images here. Drag things from other groups onto this one in the sidebar."
+                action={
+                  <span className="flex gap-2 text-sm text-muted">
+                    <Kbd>N</Kbd> note <Kbd>S</Kbd> sticky
+                  </span>
+                }
+              />
+            }
+          />
+        </ItemDropZone>
       )}
       {editing && <GroupEditDialog group={group} isOpen onClose={() => setEditing(false)} />}
     </Pane>

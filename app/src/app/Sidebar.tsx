@@ -1,6 +1,6 @@
-import { useState, type DragEvent, type ReactNode } from 'react';
+import { lazy, Suspense, useState, type DragEvent, type ReactNode } from 'react';
 import { NavLink } from 'react-router';
-import { CalendarDays, FlaskConical, Hash, Inbox, Plus, Search, Settings, StickyNote, Trash2 } from 'lucide-react';
+import { CalendarDays, CalendarRange, ChartGantt, Columns3, FlaskConical, Hash, Inbox, ListTodo, Plus, Search, Settings, StickyNote, Trash2 } from 'lucide-react';
 import { useGroupTree } from '@/data/hooks';
 import type { GroupNode } from '@/data/repos/groups';
 import { moveGroupWithUndo, moveItemsWithUndo } from '@/data/actions';
@@ -12,15 +12,24 @@ import { cn } from '@/design/cn';
 import { DRAG_GROUP, canDrag, dragKind, dropZone, readDragItems, setDragGroup } from '@/lib/dnd';
 import { toastWithUndo } from './undoActions';
 import { openNewGroup, openPalette, useUi } from './ui';
+import { openPane } from '@/features/panes/store';
 
 const closeDrawer = () => useUi.setState({ drawerOpen: false });
+const MiniCalendar = lazy(() => import('@/features/calendar/MiniCalendar').then((m) => ({ default: m.MiniCalendar })));
 
 function NavItem({ to, icon, children, onDrop }: { to: string; icon: ReactNode; children: ReactNode; onDrop?: (e: DragEvent) => void }) {
   const [over, setOver] = useState(false);
   return (
     <NavLink
       to={to}
-      onClick={closeDrawer}
+      onClick={(e) => {
+        closeDrawer();
+        // Shift-click: open beside the current view (WS-3).
+        if (e.shiftKey) {
+          e.preventDefault();
+          openPane(to);
+        }
+      }}
       onDragOver={
         onDrop &&
         ((e) => {
@@ -172,6 +181,18 @@ export function Sidebar() {
         >
           Inbox
         </NavItem>
+        <NavItem to="/tasks" icon={<ListTodo size={16} />}>
+          Tasks
+        </NavItem>
+        <NavItem to="/timeline" icon={<ChartGantt size={16} />}>
+          Timeline
+        </NavItem>
+        <NavItem to="/calendar" icon={<CalendarRange size={16} />}>
+          Calendar
+        </NavItem>
+        <NavItem to="/columns" icon={<Columns3 size={16} />}>
+          Side by side
+        </NavItem>
         <NavItem to="/stickies" icon={<StickyNote size={16} />}>
           Stickies
         </NavItem>
@@ -194,6 +215,11 @@ export function Sidebar() {
             {showArchived ? 'Hide archived' : `Show archived (${archivedCount})`}
           </button>
         )}
+      </div>
+      <div className="hidden border-t border-border px-2 py-2 [@media(min-height:700px)]:block">
+        <Suspense>
+          <MiniCalendar />
+        </Suspense>
       </div>
       <div className="border-t border-border p-3">
         <NavItem to="/lab/ink" icon={<FlaskConical size={16} />}>

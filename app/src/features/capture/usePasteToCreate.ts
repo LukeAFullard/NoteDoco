@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { isTypingTarget } from '@/app/shortcuts';
+import { useInPane, useIsActivePane } from '@/app/paneContext';
 import { showToast } from '@/design/toast';
 import { addAttachment, attachmentMarkdown } from '@/data/repos/attachments';
 import { setBodyText } from '@/data/repos/items';
@@ -13,6 +14,9 @@ import { newNote, stickiesFromLines } from './capture';
  */
 export function usePasteToCreate(groupId: Id | null, mode: 'note' | 'stickies' = 'note') {
   const navigate = useNavigate();
+  // With panes side by side, only the pane in use takes a paste, and only the pane dropped on takes a drop.
+  const isActive = useIsActivePane();
+  const inPane = useInPane();
   useEffect(() => {
     const fromData = async (data: DataTransfer | null) => {
       if (!data) return false;
@@ -36,7 +40,7 @@ export function usePasteToCreate(groupId: Id | null, mode: 'note' | 'stickies' =
       return true;
     };
     const onPaste = (e: ClipboardEvent) => {
-      if (isTypingTarget(e.target) || document.querySelector('[role="dialog"]')) return;
+      if (!isActive() || isTypingTarget(e.target) || document.querySelector('[role="dialog"]')) return;
       e.preventDefault();
       void fromData(e.clipboardData);
     };
@@ -44,7 +48,7 @@ export function usePasteToCreate(groupId: Id | null, mode: 'note' | 'stickies' =
       if (e.dataTransfer?.types.includes('Files')) e.preventDefault();
     };
     const onDrop = (e: DragEvent) => {
-      if (!e.dataTransfer?.types.includes('Files') || isTypingTarget(e.target)) return;
+      if (!e.dataTransfer?.types.includes('Files') || isTypingTarget(e.target) || !inPane(e.target)) return;
       e.preventDefault();
       void fromData(e.dataTransfer);
     };
@@ -56,5 +60,5 @@ export function usePasteToCreate(groupId: Id | null, mode: 'note' | 'stickies' =
       window.removeEventListener('dragover', onDragOver);
       window.removeEventListener('drop', onDrop);
     };
-  }, [groupId, mode, navigate]);
+  }, [groupId, mode, navigate, isActive, inPane]);
 }

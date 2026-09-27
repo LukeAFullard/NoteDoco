@@ -1,5 +1,6 @@
 import { strFromU8, strToU8, unzipSync, zipSync, type Zippable } from 'fflate';
 import { db } from '@/data/db';
+import { taskRefsFor } from '@/data/taskRefs';
 import type { Attachment, Meta } from '@/data/types';
 import { setSetting } from '@/data/repos/settings';
 import { blobBytes } from '@/lib/blob';
@@ -115,6 +116,16 @@ export async function readBackup(file: Blob): Promise<ReadBackup> {
 /** Body-like tables are keyed by their item; they follow the item's merge decision. */
 const FOLLOWS_ITEM: Partial<Record<TableName, string>> = { noteBodies: 'itemId', stickyBodies: 'itemId', boards: 'itemId' };
 
+/** Derived from bodies, so rebuilt after a restore rather than trusted (older backups lack them). */
+async function rebuildTaskRefs(itemIds: string[] | null) {
+  const bodies = itemIds
+    ? [...(await db.noteBodies.bulkGet(itemIds)), ...(await db.stickyBodies.bulkGet(itemIds))].filter((b) => !!b)
+    : [...(await db.noteBodies.toArray()), ...(await db.stickyBodies.toArray())];
+  if (itemIds) await db.taskRefs.where('itemId').anyOf(itemIds).delete();
+  else await db.taskRefs.clear();
+  await db.taskRefs.bulkPut(bodies.flatMap((b) => taskRefsFor(b.itemId, b.text)));
+}
+
 export async function restoreBackup(backup: ReadBackup, mode: 'replace' | 'merge'): Promise<{ added: number; updated: number }> {
   let added = 0;
   let updated = 0;
@@ -126,12 +137,13 @@ export async function restoreBackup(backup: ReadBackup, mode: 'replace' | 'merge
         await db.table(name).bulkPut(rows);
         added += rows.length;
       }
+      await rebuildTaskRefs(null);
       return;
     }
     // Merge: records with updatedAt keep whichever copy was edited last; others are added if missing.
     const acceptedItems = new Set<string>();
     for (const name of TABLES) {
-      if (FOLLOWS_ITEM[name]) continue;
+      if (FOLLOWS_ITEM[name] || name === 'taskRefs') continue;
       const table = db.table(name);
       for (const row of (backup.tables[name] ?? []) as Array<Record<string, unknown>>) {
         const key = table.schema.primKey.keyPath;
@@ -149,6 +161,7 @@ export async function restoreBackup(backup: ReadBackup, mode: 'replace' | 'merge
       const rows = ((backup.tables[name] ?? []) as Array<Record<string, unknown>>).filter((r) => acceptedItems.has(r[field] as string));
       await db.table(name).bulkPut(rows);
     }
+    await rebuildTaskRefs([...acceptedItems]);
   });
   return { added, updated };
 }

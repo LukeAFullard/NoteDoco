@@ -84,10 +84,12 @@ export function analyseText(text: string, format: 'markdown' | 'plain' = 'markdo
 /** Flips the checkbox on the nth checklist line (0-based among checklist lines). */
 export function toggleChecklistItem(text: string, index: number): string {
   let n = -1;
+  let inFence = false;
   return text
     .split('\n')
     .map((line) => {
-      if (!CHECKLIST.test(line)) return line;
+      if (/^\s*(```|~~~)/.test(line)) inFence = !inFence;
+      if (inFence || !CHECKLIST.test(line)) return line;
       n++;
       if (n !== index) return line;
       return line.replace(/\[( |x|X)\]/, (_, mark: string) => (mark === ' ' ? '[x]' : '[ ]'));
@@ -116,6 +118,38 @@ export function renameTagInText(text: string, from: string, to: string): string 
         .split(/(`[^`]*`)/)
         .map((part) => (part.startsWith('`') ? part : part.replace(re, `$1#${to}`)))
         .join('');
+    })
+    .join('\n');
+}
+
+export interface ChecklistLine {
+  /** 0-based among checklist lines, the index `toggleChecklistItem` takes. */
+  index: number;
+  text: string;
+  done: boolean;
+}
+
+/** Every checklist line outside code blocks, with its readable text. */
+export function checklistLines(text: string): ChecklistLine[] {
+  const out: ChecklistLine[] = [];
+  let index = 0;
+  for (const { line, code } of linesWithFences(text)) {
+    if (code) continue;
+    const m = CHECKLIST.exec(line);
+    if (!m) continue;
+    out.push({ index: index++, text: stripMarkdownLine(line), done: m[1] !== ' ' });
+  }
+  return out;
+}
+
+/** Unticks every checklist line (a repeating checklist starting again). */
+export function resetChecklist(text: string): string {
+  let inFence = false;
+  return text
+    .split('\n')
+    .map((line) => {
+      if (/^\s*(```|~~~)/.test(line)) inFence = !inFence;
+      return !inFence && CHECKLIST.test(line) ? line.replace(/\[(x|X)\]/, '[ ]') : line;
     })
     .join('\n');
 }

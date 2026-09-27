@@ -24,12 +24,24 @@ const SECTIONS: Array<[string, Array<[string, string[]]>]> = [
     ],
   ],
   [
+    'Timeline and calendar',
+    [
+      ['Move between items', ['←', '→', '↑', '↓']],
+      ['Reschedule', ['Alt', '←', '→']],
+      ['Move to another lane', ['Alt', '↑', '↓']],
+      ['Zoom in / out', ['+', '−']],
+      ['Go to today', ['T']],
+      ['Open', ['Enter']],
+    ],
+  ],
+  [
     'Writing',
     [
       ['Insert a block', ['/']],
       ['Find and replace', [mod, 'F']],
       ['Checklist', ['[ ]', 'space']],
       ['Heading', ['#', 'space']],
+      ['Date', ['@fri', 'space']],
       ['Link to a note', ['[[', 'name', ']]']],
       ['Leave focus mode', ['Esc']],
     ],

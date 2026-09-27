@@ -1,6 +1,6 @@
 # NoteDoco — Product Plan v2 (fresh start)
 
-> **Status:** Phase 0 built (see §9) · 26 September 2026
+> **Status:** Phases 0–2 built (see §9) · 27 September 2026
 > **Replaces:** the v1 plan (still in git history: `git show 89b9564:PROJECT_PLAN.md`).
 > **Companion docs:** [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) covers how to build it. [`docs/RESEARCH.md`](docs/RESEARCH.md) covers what other apps and the web platform taught us, with sources.
 
@@ -426,6 +426,21 @@ No user-facing features yet. The goal is a solid base, and early answers to the 
 **M1 demo:** create nested groups; write markdown and plain notes with images and checklists; make a wall of coloured stickies; find anything in under a second; move, tag, trash and undo; back up and restore; after upgrading, existing v1 notes are all there. **Then switch the live site to v2.**
 
 ### Phase 2 — Time and side by side → Milestone M2 "it's my organiser"
+
+> **Status (27 Sep 2026):** all P2 tasks built and tested:
+> - 157 unit tests and 41 end-to-end tests (desktop and phone), with accessibility scans and a phone-overflow check covering Today, Tasks, the timeline, the calendar and the columns view;
+> - startup JavaScript 170 KB gzipped (natural-language dates, the timeline and the calendar all load on first use);
+> - database version 2 indexes repeating items and every checklist line (with its @date).
+>
+> The M2 demo below works end to end. Reminders and phone layouts still need a check on real devices.
+>
+> Changes from the plan:
+> - repeats use a small built-in RRULE subset (daily, weekly on chosen days, monthly, yearly, interval, until) instead of the `rrule` library; monthly and yearly repeats keep to the last day of short months;
+> - a repeat can be a template ("start a fresh copy each time") as well as an item that moves on when done;
+> - the timeline draws only the visible stretch plus a screen either side, with its own windowing rather than TanStack Virtual;
+> - calendar dragging works with a mouse or pen; on touch, you change dates in the date dialog;
+> - the inspector belongs to the item page rather than being a global panel;
+> - a checklist line's date lives in its text (`@2026-10-02`), so moving the line on the timeline or calendar rewrites that text.
 
 | ID | Task | Features | Size |
 |---|---|---|---|

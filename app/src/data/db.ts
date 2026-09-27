@@ -17,6 +17,7 @@ import type {
   TaskRef,
   Version,
 } from './types';
+import { taskRefsFor } from './taskRefs';
 
 export const DB_NAME = 'notedoco';
 
@@ -68,6 +69,17 @@ export class NoteDocoDB extends Dexie {
       layouts: 'id, kind',
       settings: 'key',
     });
+    // Version 2 (Phase 2, time): index repeating items (`recurrence` is null for most items,
+    // so only repeating ones are in the index), and index the checklist lines of existing
+    // notes and stickies for Today and Tasks.
+    this.version(2)
+      .stores({ items: 'id, kind, groupId, [groupId+order], *tags, when.start, due.start, createdAt, updatedAt, deletedAt, recurrence' })
+      .upgrade(async (tx) => {
+        const bodies = [...(await tx.table<NoteBody>('noteBodies').toArray()), ...(await tx.table<StickyBody>('stickyBodies').toArray())];
+        const refs = bodies.flatMap((b) => taskRefsFor(b.itemId, b.text));
+        await tx.table<TaskRef>('taskRefs').clear();
+        if (refs.length) await tx.table<TaskRef>('taskRefs').bulkAdd(refs);
+      });
   }
 }
 

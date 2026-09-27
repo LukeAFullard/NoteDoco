@@ -3,8 +3,11 @@ import { createItem, duplicateItem, moveItem, restoreItems, trashItems, updateIt
 import { moveGroup, restoreGroup, trashGroup, updateGroup } from './repos/groups';
 import { db } from './db';
 import { touched } from './meta';
-import type { Id, Item } from './types';
+import type { Id, Item, LocalDate, TimeSpan } from './types';
 import type { ColourKey } from '@/lib/palette';
+import { completeItem, getBodyText, reopenItem, setChecklistLineDate, toggleChecklistLine, type CompleteResult } from './repos/time';
+import { setBodyText } from './repos/items';
+import { addDays, allDaySpan, diffDays, formatDay, formatSpan, shiftSpan, spanDays, spanStart } from '@/lib/time';
 
 /**
  * User-facing actions: the repository call plus an undo entry. Each returns the toast message,
@@ -103,4 +106,177 @@ export async function moveGroupWithUndo(id: Id, parentId: Id | null, beforeId: I
     redo: () => moveGroup(id, parentId, beforeId),
   });
   return label;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Time (Phase 2): dates, done, repeats
+
+type TimeFields = Pick<Item, 'when' | 'due' | 'reminders' | 'recurrence' | 'task' | 'groupId' | 'colour'>;
+const timeFields = (i: Item): TimeFields => ({ when: i.when, due: i.due, reminders: i.reminders, recurrence: i.recurrence, task: i.task, groupId: i.groupId, colour: i.colour });
+
+async function restoreFields(snapshot: [Id, TimeFields][]) {
+  for (const [id, fields] of snapshot) {
+    const now = await db.items.get(id);
+    if (now) await db.items.put(touched(now, fields));
+  }
+}
+
+/** Sets dates, reminders, repeats, the to-do checkbox or the group on items, undoably. */
+export async function setTimeWithUndo(ids: Id[], patch: Partial<TimeFields>, label = 'Date changed'): Promise<string> {
+  const before = (await db.items.bulkGet(ids)).filter((i): i is Item => !!i).map((i) => [i.id, timeFields(i)] as [Id, TimeFields]);
+  for (const id of ids) await updateItem(id, patch);
+  recordUndo({
+    label,
+    undo: () => restoreFields(before),
+    redo: async () => {
+      for (const id of ids) await updateItem(id, patch);
+    },
+  });
+  return label;
+}
+
+/**
+ * Marks an item done (or, for a repeat, moves it to its next date). Undo puts back its dates,
+ * checkbox and checklist, and trashes a template's fresh copy.
+ */
+export async function completeWithUndo(id: Id): Promise<{ label: string; result: CompleteResult }> {
+  const item = await db.items.get(id);
+  if (!item) throw new Error(`Item ${id} not found`);
+  const text = await getBodyText(id);
+  const result = await completeItem(id);
+  const label =
+    result.kind === 'done' ? 'Done'
+    : result.kind === 'next' ? `Done. Next: ${formatDay(result.next)}`
+    : 'Started a fresh copy';
+  recordUndo({
+    label,
+    undo: async () => {
+      await restoreFields([[id, timeFields(item)]]);
+      if (text !== null && (await getBodyText(id)) !== text) await setBodyText(id, text);
+      if (result.kind === 'copied') await trashItems([result.copyId]);
+    },
+    redo: async () => void (await completeItem(id)),
+  });
+  return { label, result };
+}
+
+/** Ticks or unticks an item's own checkbox. Ticking a repeating item moves it on instead. */
+export async function toggleDoneWithUndo(id: Id): Promise<string> {
+  const item = await db.items.get(id);
+  if (!item) throw new Error(`Item ${id} not found`);
+  if (!item.task?.done) return (await completeWithUndo(id)).label;
+  await reopenItem(id);
+  recordUndo({ label: 'Not done', undo: () => restoreFields([[id, timeFields(item)]]), redo: () => reopenItem(id) });
+  return 'Not done';
+}
+
+/** Ticks or unticks one checklist line inside a note or sticky. */
+export async function toggleChecklistLineWithUndo(itemId: Id, index: number, done: boolean): Promise<string> {
+  await toggleChecklistLine(itemId, index);
+  const label = done ? 'Unticked' : 'Ticked';
+  recordUndo({ label, undo: () => toggleChecklistLine(itemId, index), redo: () => toggleChecklistLine(itemId, index) });
+  return label;
+}
+
+/**
+ * Applies the change from one span to another onto a stored span. For a repeat's later
+ * occurrence, `from` is that occurrence and `stored` the series' own date, so dragging any
+ * occurrence moves (or stretches) the whole series by the same amount.
+ */
+export function applySpanChange(stored: TimeSpan, from: TimeSpan, to: TimeSpan): TimeSpan {
+  if (stored.allDay && from.allDay && to.allDay) {
+    const startDays = diffDays(from.start, to.start);
+    const endDays = diffDays(from.end ?? from.start, to.end ?? to.start);
+    return allDaySpan(addDays(stored.start, startDays), addDays(stored.end ?? stored.start, endDays));
+  }
+  if (!stored.allDay && !from.allDay && !to.allDay) {
+    const startMs = Date.parse(to.start) - Date.parse(from.start);
+    const endMs = Date.parse(to.end ?? to.start) - Date.parse(from.end ?? from.start);
+    const start = new Date(Date.parse(stored.start) + startMs);
+    const end = new Date(Date.parse(stored.end ?? stored.start) + endMs);
+    return { ...stored, start: start.toISOString(), end: end > start ? end.toISOString() : null };
+  }
+  return to;
+}
+
+/**
+ * Moves or resizes an item on the timeline or calendar (TIME-6), optionally into another
+ * group or colour, keeping reminders the same distance from it. Undoable.
+ */
+export async function rescheduleWithUndo(
+  item: Item,
+  basis: 'when' | 'due' | 'created',
+  from: TimeSpan,
+  to: TimeSpan,
+  extra: Partial<Pick<Item, 'groupId' | 'colour'>> = {},
+): Promise<string> {
+  const field = basis === 'due' ? 'due' : 'when';
+  const stored = item[field];
+  const next = stored && basis !== 'created' ? applySpanChange(stored, from, to) : to;
+  const shiftMs = spanStart(next).getTime() - (stored ? spanStart(stored).getTime() : spanStart(next).getTime());
+  const reminders = item.reminders.map((r) => ({ ...r, at: new Date(Date.parse(r.at) + shiftMs).toISOString(), firedAt: null }));
+  let label = `Moved to ${formatSpan(to)}`;
+  if (extra.groupId !== undefined && extra.groupId !== item.groupId) {
+    label += ` in ${extra.groupId ? ((await db.groups.get(extra.groupId))?.name ?? 'a group') : 'Inbox'}`;
+  }
+  if (extra.colour !== undefined && extra.colour !== item.colour && extra.groupId === undefined) label += ', colour changed';
+  return setTimeWithUndo([item.id], { [field]: next, reminders, ...extra }, label);
+}
+
+/**
+ * Puts items on a day (dropped onto a calendar day, the timeline or Today): dated items move
+ * there keeping their time and length; undated ones get that day. Undoable.
+ */
+export async function dateItemsWithUndo(ids: Id[], day: LocalDate, extra: Partial<Pick<Item, 'groupId' | 'colour'>> = {}): Promise<string> {
+  const items = (await db.items.bulkGet(ids)).filter((i): i is Item => !!i);
+  const before = items.map((i) => [i.id, timeFields(i)] as [Id, TimeFields]);
+  const apply = async () => {
+    for (const it of items) {
+      const field = it.when || !it.due ? 'when' : 'due';
+      const span = it[field];
+      const next = span ? shiftSpan(span, diffDays(spanDays(span)[0], day)) : allDaySpan(day);
+      const shiftMs = span ? spanStart(next).getTime() - spanStart(span).getTime() : 0;
+      await updateItem(it.id, {
+        [field]: next,
+        reminders: it.reminders.map((r) => ({ ...r, at: new Date(Date.parse(r.at) + shiftMs).toISOString(), firedAt: null })),
+        ...extra,
+      });
+    }
+  };
+  await apply();
+  const label = `${items.length === 1 ? 'Moved' : `Moved ${items.length} items`} to ${formatDay(day)}`;
+  recordUndo({ label, undo: () => restoreFields(before), redo: apply });
+  return label;
+}
+
+/** Moves a dated checklist line to another date by rewriting its @date (NOTE-9). Undoable. */
+export async function moveChecklistLineWithUndo(itemId: Id, index: number, date: string): Promise<string> {
+  const before = await getBodyText(itemId);
+  await setChecklistLineDate(itemId, index, date);
+  const label = `Moved to ${formatDay(date.slice(0, 10))}`;
+  recordUndo({
+    label,
+    undo: async () => {
+      if (before !== null) await setBodyText(itemId, before);
+    },
+    redo: () => setChecklistLineDate(itemId, index, date),
+  });
+  return label;
+}
+
+/**
+ * Reschedules any timeline or calendar entry: an item (with its repeat series), or a dated
+ * checklist line, whose @date is rewritten (lines keep their group and colour).
+ */
+export async function reschedulePlacedWithUndo(
+  placed: { item: Item; basis: 'when' | 'due' | 'created'; line?: { itemId: Id; anchor: string } },
+  from: TimeSpan,
+  to: TimeSpan,
+  extra: Partial<Pick<Item, 'groupId' | 'colour'>> = {},
+): Promise<string> {
+  if (!placed.line) return rescheduleWithUndo(placed.item, placed.basis, from, to, extra);
+  const d = spanStart(to);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const day = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  return moveChecklistLineWithUndo(placed.line.itemId, Number(placed.line.anchor), to.allDay ? to.start : `${day}T${pad(d.getHours())}:${pad(d.getMinutes())}`);
 }

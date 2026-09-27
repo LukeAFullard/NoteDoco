@@ -33,7 +33,8 @@ Guidance for anyone (people or AI coding agents) changing this repository. Read 
 8. **Keep startup small:** lazy-load new screens and heavy libraries (editor, ink, PDF, calendar) with `lazy()`. `npm run size` fails the build otherwise.
 9. **Preferences** in `localStorage` go through `lib/localPref.ts` (keys are prefixed; the origin is shared with other GitHub Pages sites).
 10. **Words:** UI copy is plain, friendly British English ("colour", "organise"). Identifiers use `colour` too, for consistency.
-11. Register new screens and actions in the command palette (`app/CommandPalette.tsx`).
+11. Register new screens in `app/routes.tsx` (every pane uses that list) and add them and their actions to the command palette (`app/CommandPalette.tsx`).
+12. **Dates:** all-day dates are `LocalDate` strings ("2026-10-02") and timed ones are UTC instants; use the helpers in `lib/time.ts`. Query dated things through `data/agenda.ts`.
 
 ## Gotchas we've hit (don't repeat them)
 - **File inputs:** copy `input.files` into an array before resetting the input. The FileList is live and empties.
@@ -42,6 +43,9 @@ Guidance for anyone (people or AI coding agents) changing this repository. Read 
 - **Transforms create stacking contexts:** a rotated sticky can't lift its children above a sibling overlay link, so sticky cards take clicks themselves.
 - **Don't keep callbacks in a subscribed store** if a component re-registers them every render; that loops. Use a module variable.
 - **e2e:** wait for the editor or dialog to have focus before typing. Shortcuts are ignored while a dialog is open or closing.
+- **A screen can be open in several panes at once** (split view). Document-level listeners (paste, keys, drops) must check `useIsActivePane()` or `useInPane()` from `app/paneContext.ts`, or they'll act in every pane.
+- **Never `new Date('2026-10-02')`:** that's midnight UTC, which is the previous day west of Greenwich. Use `fromLocalDate()`.
+- **e2e and the clock:** tests run at any time of day, so scroll time grids to the hours you need, and dismiss toasts before pointer work near the bottom of the screen.
 - **Heavy chunks** (editor ≈200 KB gz, search worker) are lazy; the editor is preloaded when idle.
 
 ## Definition of done
