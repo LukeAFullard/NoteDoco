@@ -5,10 +5,10 @@ Guidance for anyone (people or AI coding agents) changing this repository. Read 
 ## What's where
 - **`PROJECT_PLAN.md`**: the product plan. Features have IDs (e.g. `INK-6`), roadmap tasks have IDs (e.g. `P1.3`). Reference both in PR titles and descriptions.
 - **`docs/ARCHITECTURE.md`**: how v2 is built. **`docs/decisions/`**: why (read before changing anything they cover). **`docs/spikes/`**: experiment write-ups.
-- **`app/`**: **v2**, the app being built. All new work goes here.
-- Repository root (`src/`, `package.json`): **v1**, the current live app. Only fix critical bugs there; it's retired at milestone M1 (decision 0002).
+- **The app** is the repository itself (`src/`, `e2e/`, `package.json`), deployed at `/NoteDoco/`. It replaced v1 at milestone M1 (decision 0007); v1 lives on only in git history, and its notes are imported automatically (`src/migration/v1.ts`).
+- **`public/next/`** only redirects the old v2 preview address. Leave it alone unless you're removing it.
 
-## Commands (run from `app/`)
+## Commands
 | Command | What it does |
 |---|---|
 | `npm run dev` | Dev server |
@@ -16,7 +16,7 @@ Guidance for anyone (people or AI coding agents) changing this repository. Read 
 | `npm run build && npm run size` | Production build and the startup-JavaScript budget (200 KB gzipped) |
 | `npm run e2e` | Playwright end-to-end tests (desktop and phone), including axe accessibility scans and a phone-overflow check. In the cloud dev container set `PW_CHROMIUM_PATH=/opt/pw-browsers/chromium-1194/chrome-linux/chrome` |
 
-## Code layout (`app/src/`)
+## Code layout (`src/`)
 `app/` shell, routing, palette · `design/` tokens and primitives · `data/` database, repositories, undo · `canvas/` shared pen/canvas core · `features/<area>/` screens · `lab/` prototypes · `spikes/` experiment tests · `lib/` helpers. See ARCHITECTURE §3.
 
 ## Rules
@@ -33,7 +33,7 @@ Guidance for anyone (people or AI coding agents) changing this repository. Read 
 8. **Keep startup small:** lazy-load new screens and heavy libraries (editor, ink, PDF, calendar) with `lazy()`. `npm run size` fails the build otherwise.
 9. **Preferences** in `localStorage` go through `lib/localPref.ts` (keys are prefixed; the origin is shared with other GitHub Pages sites).
 10. **Words:** UI copy is plain, friendly British English ("colour", "organise"). Identifiers use `colour` too, for consistency.
-11. Register new screens in `app/routes.tsx` (every pane uses that list) and add them and their actions to the command palette (`app/CommandPalette.tsx`).
+11. Register new screens in `src/app/routes.tsx` (every pane uses that list) and add them and their actions to the command palette (`src/app/CommandPalette.tsx`).
 12. **Dates:** all-day dates are `LocalDate` strings ("2026-10-02") and timed ones are UTC instants; use the helpers in `lib/time.ts`. Query dated things through `data/agenda.ts`.
 
 ## Gotchas we've hit (don't repeat them)
@@ -43,7 +43,7 @@ Guidance for anyone (people or AI coding agents) changing this repository. Read 
 - **Transforms create stacking contexts:** a rotated sticky can't lift its children above a sibling overlay link, so sticky cards take clicks themselves.
 - **Don't keep callbacks in a subscribed store** if a component re-registers them every render; that loops. Use a module variable.
 - **e2e:** wait for the editor or dialog to have focus before typing. Shortcuts are ignored while a dialog is open or closing.
-- **A screen can be open in several panes at once** (split view). Document-level listeners (paste, keys, drops) must check `useIsActivePane()` or `useInPane()` from `app/paneContext.ts`, or they'll act in every pane.
+- **A screen can be open in several panes at once** (split view). Document-level listeners (paste, keys, drops) must check `useIsActivePane()` or `useInPane()` from `src/app/paneContext.ts`, or they'll act in every pane.
 - **Never `new Date('2026-10-02')`:** that's midnight UTC, which is the previous day west of Greenwich. Use `fromLocalDate()`.
 - **e2e and the clock:** tests run at any time of day, so scroll time grids to the hours you need, and dismiss toasts before pointer work near the bottom of the screen.
 - **Heavy chunks** (editor ≈200 KB gz, search worker) are lazy; the editor is preloaded when idle.

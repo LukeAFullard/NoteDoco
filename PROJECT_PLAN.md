@@ -1,6 +1,6 @@
 # NoteDoco — Product Plan v2 (fresh start)
 
-> **Status:** Phases 0–2 built (see §9) · 27 September 2026
+> **Status:** Phases 0–2 built, and v2 is the live app (milestone M1, decision 0007) · 27 September 2026
 > **Replaces:** the v1 plan (still in git history: `git show 89b9564:PROJECT_PLAN.md`).
 > **Companion docs:** [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) covers how to build it. [`docs/RESEARCH.md`](docs/RESEARCH.md) covers what other apps and the web platform taught us, with sources.
 
@@ -402,7 +402,7 @@ No user-facing features yet. The goal is a solid base, and early answers to the 
 > - 109 unit tests and 28 end-to-end tests, including accessibility scans of every screen in both themes and a phone-overflow check;
 > - startup JavaScript 160 KB gzipped.
 >
-> The M1 demo below works end to end. **Waiting on the owner:** try it at `/NoteDoco/next/`, then decide when to switch the live site (move `app/` to the root; see decision 0002).
+> The M1 demo below works end to end. **Switched on 27 Sep 2026:** v2 moved to the root and replaced v1 at `/NoteDoco/` (decision 0007); `/NoteDoco/next/` now redirects.
 >
 > Changes from the plan:
 > - source mode is a plain text area rather than CodeMirror (smaller, and iPad Scribble works in it);
@@ -423,7 +423,7 @@ No user-facing features yet. The goal is a solid base, and early answers to the 
 | P1.11 | Capture: + button, `N`/`S` shortcuts, app-icon shortcuts, paste/drop to create | CAP-1, 4, 5 | S |
 | P1.12 | Settings and personalisation: text size, density, fonts, date formats, week start, shortcut cheat sheet, TimeDoco link | UX-2, 3, 5, INT-1 | S |
 
-**M1 demo:** create nested groups; write markdown and plain notes with images and checklists; make a wall of coloured stickies; find anything in under a second; move, tag, trash and undo; back up and restore; after upgrading, existing v1 notes are all there. **Then switch the live site to v2.**
+**M1 demo:** create nested groups; write markdown and plain notes with images and checklists; make a wall of coloured stickies; find anything in under a second; move, tag, trash and undo; back up and restore; after upgrading, existing v1 notes are all there. **Then switch the live site to v2** (done 27 Sep 2026).
 
 ### Phase 2 — Time and side by side → Milestone M2 "it's my organiser"
 
