@@ -3,7 +3,7 @@ import { Command } from 'cmdk';
 import { useNavigate } from 'react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
-  CalendarDays, CalendarRange, ChartGantt, Columns2, Columns3, FilePlus, FlaskConical, FolderPlus, Hash, Inbox, Keyboard, ListTodo, Moon, NotebookPen, Palette, Redo2, Search, Settings, StickyNote, Sun, Trash2, Undo2,
+  CalendarDays, CalendarRange, ChartGantt, PenLine, Columns2, Columns3, FilePlus, FlaskConical, FolderPlus, Hash, Inbox, Keyboard, ListTodo, Moon, NotebookPen, Palette, Redo2, Search, Settings, StickyNote, Sun, Trash2, Undo2,
 } from 'lucide-react';
 import { db } from '@/data/db';
 import { useGroups } from '@/data/hooks';
@@ -86,6 +86,7 @@ export function CommandPalette() {
   ];
   const actions: Cmd[] = [
     { id: 'new-note', label: 'New note', icon: <FilePlus size={16} />, run: () => void create.note() },
+    { id: 'new-ink', label: 'New ink note', icon: <PenLine size={16} />, keywords: ['handwriting', 'handwritten', 'draw', 'pen', 'sketch', 'stylus'], run: () => void create.ink() },
     { id: 'new-sticky', label: 'New sticky', icon: <StickyNote size={16} />, run: () => void create.sticky() },
     { id: 'new-group', label: 'New group', icon: <FolderPlus size={16} />, run: () => openNewGroup() },
     {

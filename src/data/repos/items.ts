@@ -6,6 +6,7 @@ import { nowIso } from '@/lib/ids';
 import type { ColourKey } from '@/lib/palette';
 import { analyseText } from '@/lib/textInfo';
 import { taskRefsFor } from '../taskRefs';
+import { copyInk, createInkBody, deleteInkBodies, inkPreview, strokeCount } from './ink';
 
 export const TRASH_RETENTION_DAYS = 30;
 
@@ -90,14 +91,17 @@ export async function createItem(input: NewItem): Promise<Id> {
   item.when = input.when ?? null;
   item.due = input.due ?? null;
   if (input.task) item.task = { done: false, doneAt: null };
+  if (input.kind === 'ink') item.preview = inkPreview(1);
 
-  await db.transaction('rw', db.items, db.noteBodies, db.stickyBodies, db.taskRefs, async () => {
+  await db.transaction('rw', [db.items, db.noteBodies, db.stickyBodies, db.taskRefs, db.inkDocs, db.inkPages], async () => {
     await db.items.add(item);
     await syncTaskRefs(item.id, text);
     if (input.kind === 'note') {
       await db.noteBodies.add({ itemId: item.id, format: input.format ?? 'markdown', text });
     } else if (input.kind === 'sticky') {
       await db.stickyBodies.add({ itemId: item.id, text, inkPageId: null, size: input.size ?? 'M', stuckTo: null });
+    } else if (input.kind === 'ink') {
+      await createInkBody(item.id);
     }
   });
   return item.id;
@@ -154,12 +158,13 @@ export async function duplicateItem(id: Id): Promise<Id> {
     format: note?.format,
     size: sticky?.size,
   });
+  if (it.kind === 'ink') await copyInk(id, copyId);
   await db.transaction('rw', db.items, async () => {
     const copy = (await db.items.get(copyId))!;
     const sibs = await listItems(it.groupId);
     const next = sibs[sibs.findIndex((s) => s.id === id) + 1];
     const order = next && next.id !== copyId ? orderBetween(it.order, next.order) : copy.order;
-    await db.items.put({ ...copy, order, manualTags: it.manualTags, tags: it.tags, when: it.when, due: it.due, task: it.task && { done: false, doneAt: null } });
+    await db.items.put({ ...copy, order, title: it.kind === 'ink' ? it.title : copy.title, preview: it.kind === 'ink' ? it.preview : copy.preview, manualTags: it.manualTags, tags: it.tags, when: it.when, due: it.due, task: it.task && { done: false, doneAt: null } });
   });
   return copyId;
 }
@@ -201,8 +206,9 @@ export async function restoreItems(ids: Id[]): Promise<void> {
 
 /** Permanently deletes items and everything that belongs to them. Only the Trash calls this. */
 export async function deleteItemsForever(ids: Id[]): Promise<void> {
-  await db.transaction('rw', [db.items, db.noteBodies, db.stickyBodies, db.versions, db.attachments, db.links, db.taskRefs], async () => {
+  await db.transaction('rw', [db.items, db.noteBodies, db.stickyBodies, db.versions, db.attachments, db.links, db.taskRefs, db.inkDocs, db.inkPages, db.strokes], async () => {
     await db.items.bulkDelete(ids);
+    await deleteInkBodies(ids);
     await db.noteBodies.bulkDelete(ids);
     await db.stickyBodies.bulkDelete(ids);
     await db.versions.where('itemId').anyOf(ids).delete();
@@ -236,9 +242,15 @@ export async function emptyTrash(): Promise<number> {
  * straight away). It never had anything to restore, so it skips the Trash.
  */
 export async function discardIfEmpty(id: Id): Promise<boolean> {
-  return db.transaction('rw', db.items, db.noteBodies, db.stickyBodies, async () => {
+  return db.transaction('rw', [db.items, db.noteBodies, db.stickyBodies, db.inkDocs, db.inkPages, db.strokes], async () => {
     const it = await db.items.get(id);
     if (!it) return false;
+    if (it.kind === 'ink') {
+      if (it.title.trim() || it.manualTags.length || it.when || it.due || (await strokeCount(id))) return false;
+      await deleteInkBodies([id]);
+      await db.items.delete(id);
+      return true;
+    }
     const text = it.kind === 'note' ? (await db.noteBodies.get(id))?.text : (await db.stickyBodies.get(id))?.text;
     if ((text ?? '').trim() || it.manualTags.length || it.when || it.due) return false;
     await db.items.delete(id);

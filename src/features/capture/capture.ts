@@ -14,6 +14,13 @@ export async function newNote(groupId: Id | null = useUi.getState().currentGroup
   return id;
 }
 
+/** A handwritten note (P3.5). */
+export async function newInk(groupId: Id | null = useUi.getState().currentGroupId): Promise<Id> {
+  const id = await createItem({ kind: 'ink', groupId });
+  void maybeRequestPersistence();
+  return id;
+}
+
 export async function newSticky(
   groupId: Id | null = useUi.getState().currentGroupId,
   text = '',

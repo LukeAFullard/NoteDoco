@@ -77,7 +77,7 @@ function BottomTab({ to, onPress, icon, label }: { to?: string; onPress?: () => 
 export function Shell() {
   const create = useCreate();
   const actions = useMemo(
-    () => ({ newNote: () => void create.note(), newSticky: () => void create.sticky(), showShortcuts: () => useUi.setState({ shortcutsOpen: true }) }),
+    () => ({ newNote: () => void create.note(), newSticky: () => void create.sticky(), newInk: () => void create.ink(), showShortcuts: () => useUi.setState({ shortcutsOpen: true }) }),
     [create],
   );
   useGlobalShortcuts(actions);

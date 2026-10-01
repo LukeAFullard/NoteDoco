@@ -11,8 +11,20 @@ const SECTIONS: Array<[string, Array<[string, string[]]>]> = [
       ['Search and commands', [mod, 'K']],
       ['New note', ['N']],
       ['New sticky', ['S']],
+      ['New ink note', ['I']],
       ['Undo / redo', [mod, 'Z']],
       ['Keyboard shortcuts', ['?']],
+    ],
+  ],
+  [
+    'Ink notes',
+    [
+      ['Ballpoint, fountain pen, marker', ['P', 'F', 'M']],
+      ['Highlighter, eraser', ['H', 'E']],
+      ['Zoom in / out / fit', ['+', '−', '0']],
+      ['Scroll', ['←', '→', '↑', '↓']],
+      ['Pan with the mouse', ['Space', 'drag']],
+      ['Zoom with the mouse', [mod, 'scroll']],
     ],
   ],
   [

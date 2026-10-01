@@ -120,6 +120,8 @@ export interface Stroke {
   colour: string;
   size: number;
   opacity: number;
+  /** false when the device gave no pressure (the renderer simulates it). Absent = true. */
+  pressure?: boolean;
   points: Uint8Array;
   bbox: [number, number, number, number];
   createdAt: Instant;
