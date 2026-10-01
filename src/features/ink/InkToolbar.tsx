@@ -1,31 +1,42 @@
-import { Check, FilePlus2, Redo2, Undo2 } from 'lucide-react';
-import { Button as AriaButton, Dialog, DialogTrigger, Popover, Radio, RadioGroup } from 'react-aria-components';
+import { ClipboardPaste, Ellipsis, FilePlus2, Files, NotebookText, Redo2, SquareDashedMousePointer, Star, Undo2 } from 'lucide-react';
+import { Radio, RadioGroup } from 'react-aria-components';
 import { IconButton } from '@/design/Button';
-import { cn } from '@/design/cn';
-import type { EngineState, InkTool } from '@/canvas/engine';
-import { SIZES, TOOLS } from './tools';
-import { HIGHLIGHTER_COLOUR_KEYS, INK_COLOURS, PEN_COLOUR_KEYS, inkLabel, resolveInk } from '@/canvas/inkColours';
-
-const radioCls =
-  'flex h-9 w-9 cursor-pointer items-center justify-center rounded-panel text-text outline-none transition-colors hover:bg-accent-soft data-[selected]:bg-accent-fill data-[selected]:text-on-accent data-[focus-visible]:ring-2 data-[focus-visible]:ring-focus';
+import { Menu, MenuItem } from '@/design/Menu';
+import type { EngineState, EraserMode, InkTool } from '@/canvas/engine';
+import type { PenTool } from '@/canvas/strokeStyle';
+import { TOOLS } from './tools';
+import { ColourPicker, EraserOptions, radioCls, Swatch, ThicknessPicker, triggerCls } from './pickers';
+import { favouriteLabel, MAX_FAVOURITES, sameFavourite, type Favourite } from './favourites';
 
 export interface ToolbarProps {
   state: EngineState;
+  favourites: Favourite[];
   onTool: (t: InkTool) => void;
   onColour: (c: string) => void;
   onSize: (s: number) => void;
+  onEraser: (m: EraserMode, highlighterOnly: boolean) => void;
+  onFavourite: (f: Favourite) => void;
+  onAddFavourite: () => void;
+  onRemoveFavourite: (i: number) => void;
   onUndo: () => void;
   onRedo: () => void;
   onAddPage: () => void;
+  onPages: () => void;
+  onPaper: () => void;
+  onPaste: () => void;
+  onSelectAll: () => void;
 }
 
-/** The pen toolbar (INK-1, 2, 3, 5, 7). Every control has a name and works by keyboard. */
-export function InkToolbar({ state, onTool, onColour, onSize, onUndo, onRedo, onAddPage }: ToolbarProps) {
-  const highlighter = state.tool === 'highlighter';
-  const keys = highlighter ? HIGHLIGHTER_COLOUR_KEYS : PEN_COLOUR_KEYS;
+const isPen = (t: InkTool): t is PenTool => t !== 'eraser' && t !== 'lasso';
+
+/** The pen toolbar (INK-1–7). Every control has a name and works by keyboard. */
+export function InkToolbar(p: ToolbarProps) {
+  const { state } = p;
+  const pen = isPen(state.tool);
+  const current: Favourite | null = pen ? { tool: state.tool as PenTool, colour: state.colour, size: state.size } : null;
   return (
-    <div role="toolbar" aria-label="Pens" className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-border bg-surface px-2 py-1.5">
-      <RadioGroup aria-label="Tool" orientation="horizontal" value={state.tool} onChange={(v) => onTool(v as InkTool)} className="flex gap-0.5">
+    <div role="toolbar" aria-label="Pens" className="flex flex-wrap items-center gap-x-1.5 gap-y-1 border-b border-border bg-surface px-2 py-1.5">
+      <RadioGroup aria-label="Tool" orientation="horizontal" value={state.tool} onChange={(v) => p.onTool(v as InkTool)} className="flex gap-0.5">
         {TOOLS.map((t) => (
           <Radio key={t.tool} value={t.tool} aria-label={`${t.label} (${t.key})`} className={radioCls}>
             <span aria-hidden>{t.icon}</span>
@@ -33,79 +44,90 @@ export function InkToolbar({ state, onTool, onColour, onSize, onUndo, onRedo, on
         ))}
       </RadioGroup>
 
+      <span className="flex items-center gap-0.5">
+        {state.tool === 'eraser' ? (
+          <EraserOptions mode={state.eraser} highlighterOnly={state.eraseHighlighterOnly} onChange={p.onEraser} />
+        ) : state.tool === 'lasso' ? null : (
+          <>
+            <ColourPicker value={state.colour} onChange={p.onColour} kind={state.tool === 'highlighter' ? 'highlighter' : 'pen'} isDisabled={!pen} />
+            <ThicknessPicker value={state.size} onChange={p.onSize} isDisabled={!pen} />
+          </>
+        )}
+      </span>
+
       <span className="h-6 w-px bg-border" aria-hidden />
 
-      <DialogTrigger>
-        <AriaButton
-          aria-label={`Colour: ${inkLabel(state.colour)}`}
-          isDisabled={state.tool === 'eraser'}
-          className="flex h-9 w-9 items-center justify-center rounded-panel outline-none hover:bg-accent-soft data-[disabled]:opacity-40 data-[focus-visible]:ring-2 data-[focus-visible]:ring-focus"
+      {/* Favourite pens (INK-5). */}
+      <span role="group" aria-label="Favourite pens" className="flex items-center gap-0.5">
+        {p.favourites.map((f, i) => {
+          const tool = TOOLS.find((t) => t.tool === f.tool)!;
+          const on = !!current && sameFavourite(f, current);
+          return (
+            <IconButton
+              key={`${f.tool}-${f.colour}-${f.size}-${i}`}
+              label={favouriteLabel(f)}
+              aria-pressed={on}
+              size="sm"
+              onPress={() => p.onFavourite(f)}
+              className={on ? 'relative h-9 w-9 bg-accent-soft' : 'relative h-9 w-9'}
+            >
+              {tool.icon}
+              <Swatch colour={f.colour} className="absolute right-1 bottom-1 h-2.5 w-2.5" />
+            </IconButton>
+          );
+        })}
+        <Menu
+          label="Favourite pens"
+          trigger={
+            <IconButton label="Favourite pens: add or remove" size="sm" className="h-9 w-9">
+              <Star size={16} />
+            </IconButton>
+          }
         >
-          <span className="block h-6 w-6 rounded-full border border-border" style={{ background: resolveInk(state.colour, 'white') }} aria-hidden />
-        </AriaButton>
-        <Popover placement="bottom" className="rounded-panel border border-border bg-surface p-2 shadow-lg outline-none">
-          <Dialog aria-label={highlighter ? 'Highlighter colour' : 'Ink colour'} className="outline-none">
-            {({ close }) => (
-              <RadioGroup
-                aria-label={highlighter ? 'Highlighter colour' : 'Ink colour'}
-                orientation="horizontal"
-                value={state.colour}
-                onChange={(v) => {
-                  onColour(v);
-                  close();
-                }}
-                className="grid grid-cols-6 gap-1.5"
-              >
-                {keys.map((k) => (
-                  <Radio
-                    key={k}
-                    value={k}
-                    aria-label={INK_COLOURS[k].label}
-                    className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-border outline-none data-[focus-visible]:ring-2 data-[focus-visible]:ring-focus data-[focus-visible]:ring-offset-2"
-                    style={{ background: INK_COLOURS[k].light }}
-                  >
-                    {({ isSelected }) =>
-                      isSelected ? (
-                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-surface text-text">
-                          <Check size={14} aria-hidden />
-                        </span>
-                      ) : null
-                    }
-                  </Radio>
-                ))}
-              </RadioGroup>
-            )}
-          </Dialog>
-        </Popover>
-      </DialogTrigger>
-
-      <RadioGroup
-        aria-label="Thickness"
-        orientation="horizontal"
-        value={String(state.size)}
-        onChange={(v) => onSize(Number(v))}
-        isDisabled={state.tool === 'eraser'}
-        className="flex gap-0.5 data-[disabled]:opacity-40"
-      >
-        {SIZES.map((s) => (
-          <Radio key={s.size} value={String(s.size)} aria-label={s.label} className={radioCls}>
-            <span aria-hidden className="block rounded-full bg-current" style={{ width: 3 + s.size * 5, height: 3 + s.size * 5 }} />
-          </Radio>
-        ))}
-      </RadioGroup>
+          <MenuItem textValue="Add this pen" onAction={p.onAddFavourite} isDisabled={!current || p.favourites.some((f) => sameFavourite(f, current))}>
+            Add this pen{p.favourites.length >= MAX_FAVOURITES ? ' (replaces the first)' : ''}
+          </MenuItem>
+          {p.favourites.map((f, i) => (
+            <MenuItem key={i} textValue={`Remove ${favouriteLabel(f)}`} onAction={() => p.onRemoveFavourite(i)}>
+              Remove {favouriteLabel(f)}
+            </MenuItem>
+          ))}
+        </Menu>
+      </span>
 
       <span className="h-6 w-px bg-border" aria-hidden />
 
       <span className="flex gap-0.5">
-        <IconButton label="Undo" size="sm" isDisabled={!state.canUndo} onPress={onUndo} className="h-9 w-9">
+        <IconButton label="Undo" size="sm" isDisabled={!state.canUndo} onPress={p.onUndo} className="h-9 w-9">
           <Undo2 size={18} />
         </IconButton>
-        <IconButton label="Redo" size="sm" isDisabled={!state.canRedo} onPress={onRedo} className="h-9 w-9">
+        <IconButton label="Redo" size="sm" isDisabled={!state.canRedo} onPress={p.onRedo} className="h-9 w-9">
           <Redo2 size={18} />
         </IconButton>
-        <IconButton label="Add a page" size="sm" onPress={onAddPage} className={cn('h-9 w-9')}>
-          <FilePlus2 size={18} />
-        </IconButton>
+        <Menu
+          label="Pages and more"
+          trigger={
+            <IconButton label="Pages and more" size="sm" className={triggerCls}>
+              <Ellipsis size={18} />
+            </IconButton>
+          }
+        >
+          <MenuItem textValue="Add a page" onAction={p.onAddPage}>
+            <FilePlus2 size={15} aria-hidden /> Add a page
+          </MenuItem>
+          <MenuItem textValue="Pages" onAction={p.onPages}>
+            <Files size={15} aria-hidden /> Pages…
+          </MenuItem>
+          <MenuItem textValue="Paper" onAction={p.onPaper}>
+            <NotebookText size={15} aria-hidden /> Paper…
+          </MenuItem>
+          <MenuItem textValue="Select all on this page" onAction={p.onSelectAll}>
+            <SquareDashedMousePointer size={15} aria-hidden /> Select all on this page
+          </MenuItem>
+          <MenuItem textValue="Paste" onAction={p.onPaste} isDisabled={!state.canPaste}>
+            <ClipboardPaste size={15} aria-hidden /> Paste
+          </MenuItem>
+        </Menu>
       </span>
     </div>
   );

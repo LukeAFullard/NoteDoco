@@ -3,6 +3,7 @@ import { boundsOf, decodePoints, distanceToPolyline, encodePoints, type InkPoint
 import { PEN_STYLES, type PenTool } from './strokeStyle';
 import type { Stroke } from '@/data/types';
 import type { Rect } from './camera';
+import { applyMatrix, matrixScale, pointInPolygon, rectOfPoints, resample, type Matrix } from './geometry';
 
 /**
  * The in-memory ink model (ARCHITECTURE §8.3): strokes per page in page coordinates, an
@@ -71,6 +72,53 @@ export function fromStored(s: Stroke): InkStroke {
   };
 }
 
+/**
+ * Precise erase (INK-3): cuts out the part of a stroke within `r` of (x, y). Returns the
+ * pieces left (possibly none), or null when the eraser didn't touch it. Pieces get ids that
+ * sort right after the original's, so they keep its place in the stack.
+ */
+export function splitStroke(s: InkStroke, x: number, y: number, r: number): InkStroke[] | null {
+  const reach = r + strokeRadius(s.tool, s.size);
+  const pts = resample(s.points, Math.max(0.5, r / 2));
+  const keep = pts.map((p) => Math.hypot(p.x - x, p.y - y) > reach);
+  if (keep.every(Boolean)) return null;
+  const pieces: InkPoint[][] = [];
+  let run: InkPoint[] = [];
+  pts.forEach((p, i) => {
+    if (keep[i]) run.push(p);
+    else if (run.length) {
+      pieces.push(run);
+      run = [];
+    }
+  });
+  if (run.length) pieces.push(run);
+  return pieces
+    .filter((piece) => piece.length > 1)
+    .map((points, i) => makeStroke({ ...s, id: `${s.id}~${i}`, points: points.map((p) => ({ ...p, t: p.t - points[0]!.t })) }));
+}
+
+/** A stroke moved, scaled or rotated (same id, so it keeps its place in the stack). */
+export function transformStroke(s: InkStroke, m: Matrix, pageId = s.pageId): InkStroke {
+  const k = matrixScale(m);
+  return makeStroke({
+    ...s,
+    pageId,
+    size: Math.min(12, Math.max(0.2, s.size * k)),
+    points: s.points.map((p) => ({ ...applyMatrix(m, p.x, p.y), p: p.p, t: p.t })),
+  });
+}
+
+/** The area covered by some strokes. */
+export function boundsOfStrokes(strokes: readonly InkStroke[]): Rect | null {
+  if (!strokes.length) return null;
+  return {
+    minX: Math.min(...strokes.map((s) => s.bbox[0])),
+    minY: Math.min(...strokes.map((s) => s.bbox[1])),
+    maxX: Math.max(...strokes.map((s) => s.bbox[2])),
+    maxY: Math.max(...strokes.map((s) => s.bbox[3])),
+  };
+}
+
 const invert = (c: StrokeChange): StrokeChange => ({ added: c.removed, removed: c.added });
 const byId = (a: InkStroke, b: InkStroke) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 
@@ -111,6 +159,15 @@ export class InkModel {
       .search(rect)
       .map((b) => b.stroke)
       .sort(byId);
+  }
+
+  /** Lasso (INK-6): strokes with at least half their points inside the polygon. */
+  inPolygon(pageId: string, poly: ReadonlyArray<{ x: number; y: number }>): InkStroke[] {
+    if (poly.length < 3) return [];
+    return this.query(pageId, rectOfPoints(poly)).filter((s) => {
+      const inside = s.points.filter((p) => pointInPolygon(p.x, p.y, poly)).length;
+      return inside >= s.points.length / 2;
+    });
   }
 
   /** Strokes within `radius` of a point (the stroke eraser). */
@@ -171,12 +228,26 @@ export class InkModel {
     this.redoStack = [];
   }
 
-  /** Forgets a page's strokes without recording anything (the page was deleted). */
+  /**
+   * Forgets a page's strokes (the page was deleted) and removes them from the history, so
+   * undoing can't bring back ink onto a page that isn't there. Undoing the page deletion
+   * itself is app-level undo, which restores the page and its strokes from storage.
+   */
   dropPage(pageId: string): InkStroke[] {
     const list = [...this.strokes(pageId)];
     for (const s of list) this.removeOne(s.id);
     this.pages.delete(pageId);
+    const prune = (stack: StrokeChange[]) =>
+      stack
+        .map((c) => ({ added: c.added.filter((s) => s.pageId !== pageId), removed: c.removed.filter((s) => s.pageId !== pageId) }))
+        .filter((c) => c.added.length || c.removed.length);
+    this.undoStack = prune(this.undoStack);
+    this.redoStack = prune(this.redoStack);
     return list;
+  }
+
+  hasPage(pageId: string) {
+    return this.pages.has(pageId);
   }
 
   private addOne(s: InkStroke) {

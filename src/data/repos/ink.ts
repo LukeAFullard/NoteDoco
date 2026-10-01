@@ -135,3 +135,92 @@ export async function deleteInkBodies(itemIds: Id[]) {
   await db.inkPages.bulkDelete(pages);
   await db.inkDocs.bulkDelete(docs.map((d) => d.id));
 }
+
+/** A deleted page with its strokes, kept so the deletion can be undone. */
+export interface PageSnapshot {
+  itemId: Id;
+  page: InkPage;
+  strokes: Stroke[];
+}
+
+/** Deletes a page and its strokes. A note always keeps at least one page. */
+export async function deletePage(itemId: Id, pageId: Id): Promise<PageSnapshot | null> {
+  return db.transaction('rw', db.items, db.inkDocs, db.inkPages, db.strokes, async () => {
+    const page = await db.inkPages.get(pageId);
+    if (!page || (await db.inkPages.where('docId').equals(page.docId).count()) < 2) return null;
+    const strokes = await db.strokes.where('pageId').equals(pageId).toArray();
+    await db.strokes.where('pageId').equals(pageId).delete();
+    await db.inkPages.delete(pageId);
+    await touchItem(itemId, { preview: pagePreview(await db.inkPages.where('docId').equals(page.docId).count()) });
+    return { itemId, page, strokes };
+  });
+}
+
+export async function restorePage(snap: PageSnapshot) {
+  await db.transaction('rw', db.items, db.inkPages, db.strokes, async () => {
+    await db.inkPages.put(snap.page);
+    await db.strokes.bulkPut(snap.strokes);
+    await touchItem(snap.itemId, { preview: pagePreview(await db.inkPages.where('docId').equals(snap.page.docId).count()) });
+  });
+}
+
+/** Moves a page before `beforeId` (null = to the end). Returns its old order key. */
+export async function movePage(itemId: Id, pageId: Id, beforeId: Id | null): Promise<string | null> {
+  return db.transaction('rw', db.items, db.inkPages, async () => {
+    const page = await db.inkPages.get(pageId);
+    if (!page) return null;
+    const others = (await listPages(page.docId)).filter((p) => p.id !== pageId);
+    const i = beforeId ? others.findIndex((p) => p.id === beforeId) : others.length;
+    const at = i < 0 ? others.length : i;
+    await db.inkPages.put({ ...page, order: orderBetween(others[at - 1]?.order ?? null, others[at]?.order ?? null) });
+    await touchItem(itemId);
+    return page.order;
+  });
+}
+
+export async function setPageOrder(itemId: Id, pageId: Id, order: string) {
+  await db.transaction('rw', db.items, db.inkPages, async () => {
+    await db.inkPages.update(pageId, { order });
+    await touchItem(itemId);
+  });
+}
+
+/** Copies a page (and its ink) to just after it. */
+export async function duplicatePage(itemId: Id, pageId: Id): Promise<InkPage | null> {
+  return db.transaction('rw', db.items, db.inkDocs, db.inkPages, db.strokes, async () => {
+    const page = await db.inkPages.get(pageId);
+    if (!page) return null;
+    const copy = await addPage(itemId, pageId, page.paper);
+    const strokes = (await db.strokes.where('pageId').equals(pageId).toArray()).sort((a, b) => (a.id < b.id ? -1 : 1));
+    await db.strokes.bulkAdd(strokes.map((s) => ({ ...s, id: newId(), pageId: copy.id })));
+    return copy;
+  });
+}
+
+/** Removes a page made by duplicatePage or addPage (their undo). */
+export async function removePage(itemId: Id, pageId: Id) {
+  await db.transaction('rw', db.items, db.inkDocs, db.inkPages, db.strokes, async () => {
+    const page = await db.inkPages.get(pageId);
+    if (!page) return;
+    await db.strokes.where('pageId').equals(pageId).delete();
+    await db.inkPages.delete(pageId);
+    await touchItem(itemId, { preview: pagePreview(await db.inkPages.where('docId').equals(page.docId).count()) });
+  });
+}
+
+/** The current paper of each page (to undo a paper change). */
+export async function paperOf(itemId: Id): Promise<{ doc: Paper; pages: Record<Id, Paper> } | null> {
+  const doc = await docFor(itemId);
+  if (!doc) return null;
+  return { doc: doc.paper, pages: Object.fromEntries((await listPages(doc.id)).map((p) => [p.id, p.paper])) };
+}
+
+export async function restorePaper(itemId: Id, saved: { doc: Paper; pages: Record<Id, Paper> }) {
+  await db.transaction('rw', db.items, db.inkDocs, db.inkPages, async () => {
+    const doc = await docFor(itemId);
+    if (!doc) return;
+    await db.inkDocs.put({ ...doc, paper: saved.doc });
+    for (const [id, paper] of Object.entries(saved.pages)) await db.inkPages.update(id, { paper });
+    await touchItem(itemId);
+  });
+}

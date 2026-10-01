@@ -1,19 +1,25 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { Maximize, Minus, Plus } from 'lucide-react';
-import { InkEngine, type EngineState, type InkTool } from '@/canvas/engine';
+import { InkEngine, type EngineState, type EraserMode, type InkTool } from '@/canvas/engine';
 import { fromStored, toStored, type StrokeChange } from '@/canvas/model';
 import { HIGHLIGHTER_COLOUR_KEYS } from '@/canvas/inkColours';
+import { db } from '@/data/db';
 import { addPage, listPages, loadInk, saveStrokes } from '@/data/repos/ink';
 import { updateItem } from '@/data/repos/items';
-import type { InkPage, Item } from '@/data/types';
+import type { Item } from '@/data/types';
 import { IconButton } from '@/design/Button';
 import { EmptyState } from '@/design/EmptyState';
 import { showToast } from '@/design/toast';
 import { isTypingTarget } from '@/app/shortcuts';
 import { useDebouncedSave } from '@/lib/useDebouncedSave';
-import { readPref, writePref } from '@/lib/localPref';
+import { readPref, useLocalPref, writePref } from '@/lib/localPref';
 import { InkToolbar } from './InkToolbar';
+import { SelectionBar } from './SelectionBar';
+import { PageSorter } from './PageSorter';
+import { PaperDialog } from './PaperDialog';
 import { TOOLS } from './tools';
+import { addFavourite, DEFAULT_FAVOURITES, removeFavourite, type Favourite } from './favourites';
 
 interface PenPrefs {
   tool: InkTool;
@@ -21,12 +27,17 @@ interface PenPrefs {
   pen: string;
   highlighter: string;
   size: number;
+  eraser: EraserMode;
+  eraseHighlighterOnly: boolean;
 }
 
-const DEFAULT_PREFS: PenPrefs = { tool: 'ballpoint', pen: 'black', highlighter: 'yellow', size: 1 };
+const DEFAULT_PREFS: PenPrefs = { tool: 'ballpoint', pen: 'black', highlighter: 'yellow', size: 1, eraser: 'stroke', eraseHighlighterOnly: false };
 const PREF_KEY = 'ink.pen';
+const prefs = (): PenPrefs => ({ ...DEFAULT_PREFS, ...readPref<Partial<PenPrefs>>(PREF_KEY, {}) });
+const remember = (patch: Partial<PenPrefs>) => writePref(PREF_KEY, { ...prefs(), ...patch });
 
 const PAN_STEP = 64;
+const isHighlighterColour = (c: string) => (HIGHLIGHTER_COLOUR_KEYS as readonly string[]).includes(c);
 
 /**
  * Saves strokes in order, one action at a time. If storage fails, says so (decision 0003):
@@ -67,123 +78,153 @@ function TitleField({ item }: { item: Item }) {
 /** A handwritten note (P3.5): pages of ink, saved as you write. */
 export function InkEditor({ item }: { item: Item }) {
   const hostRef = useRef<HTMLDivElement>(null);
-  const engineRef = useRef<InkEngine | null>(null);
-  const [pages, setPages] = useState<InkPage[] | null>(null);
+  const [engine, setEngine] = useState<InkEngine | null>(null);
+  const [docId, setDocId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [state, setState] = useState<EngineState | null>(null);
   const [announcement, setAnnouncement] = useState('');
+  const [dialog, setDialog] = useState<'pages' | 'paper' | null>(null);
+  const [favourites, setFavourites] = useLocalPref<Favourite[]>('ink.favourites', DEFAULT_FAVOURITES);
+  const known = useRef(new Set<string>());
+  const scrollTo = useRef<string | null>(null);
+  const adding = useRef(false);
   const save = useStrokeSaver(item.id);
   const itemId = item.id;
-  const appendPageRef = useRef<() => void>(() => {});
+  const say = (msg: string) => setAnnouncement(msg);
+
+  const appendPage = useCallback(
+    async (automatic: boolean) => {
+      if (adding.current) return;
+      adding.current = true;
+      try {
+        const page = await addPage(itemId);
+        if (!automatic) scrollTo.current = page.id;
+        setAnnouncement(automatic ? 'A new page was added below.' : 'Page added.');
+      } finally {
+        adding.current = false;
+      }
+    },
+    [itemId],
+  );
 
   // Load once per note, then hand everything to the engine.
   useEffect(() => {
     let live = true;
-    let engine: InkEngine | null = null;
+    let created: InkEngine | null = null;
     loadInk(itemId)
-      .then(({ pages: loadedPages, strokes }) => {
-        if (!live) return;
-        setPages(loadedPages);
+      .then(({ doc, pages, strokes }) => {
         const host = hostRef.current;
-        if (!host) return;
-        const prefs = { ...DEFAULT_PREFS, ...readPref<Partial<PenPrefs>>(PREF_KEY, {}) };
-        engine = new InkEngine(host, {
-          pages: loadedPages,
+        if (!live || !host) return;
+        const p = prefs();
+        created = new InkEngine(host, {
+          pages,
           strokes: strokes.map(fromStored),
           onState: setState,
           onChange: save,
           onNearEnd: () => void appendPage(true),
         });
-        engine.tool = prefs.tool;
-        engine.colour = prefs.tool === 'highlighter' ? prefs.highlighter : prefs.pen;
-        engine.size = prefs.size;
-        engineRef.current = engine;
-        setState(engine.state);
+        created.tool = p.tool;
+        created.colour = p.tool === 'highlighter' ? p.highlighter : p.pen;
+        created.size = p.size;
+        created.setEraser(p.eraser, p.eraseHighlighterOnly);
+        known.current = new Set(pages.map((pg) => pg.id));
+        setDocId(doc.id);
+        setEngine(created);
       })
       .catch((err: unknown) => {
         if (live) setError(err instanceof Error ? err.message : String(err));
       });
-
-    let adding = false;
-    const appendPage = async (automatic: boolean) => {
-      if (adding) return;
-      adding = true;
-      const page = await addPage(itemId).finally(() => (adding = false));
-      const next = await listPages(page.docId);
-      if (!live) return;
-      setPages(next);
-      engine?.setPages(next);
-      if (!automatic) engine?.scrollToPage(next.findIndex((p) => p.id === page.id));
-      setAnnouncement(automatic ? 'A new page was added below.' : `Page ${next.length} added.`);
-    };
-    appendPageRef.current = () => void appendPage(false);
-
     return () => {
       live = false;
-      engine?.destroy();
-      engineRef.current = null;
+      created?.destroy();
+      setEngine(null);
     };
-  }, [itemId, save]);
+  }, [itemId, save, appendPage]);
 
-  const remember = (patch: Partial<PenPrefs>) => writePref(PREF_KEY, { ...DEFAULT_PREFS, ...readPref<Partial<PenPrefs>>(PREF_KEY, {}), ...patch });
+  // Pages come from storage, so undo from a toast, the page sorter and other panes all show up.
+  const pages = useLiveQuery(() => (docId ? listPages(docId) : undefined), [docId]);
+  useEffect(() => {
+    if (!engine || !pages) return;
+    let live = true;
+    const fresh = pages.filter((p) => !known.current.has(p.id)).map((p) => p.id);
+    void (fresh.length ? db.strokes.where('pageId').anyOf(fresh).toArray() : Promise.resolve([])).then((strokes) => {
+      if (!live) return;
+      known.current = new Set(pages.map((p) => p.id));
+      engine.setPages(pages, strokes.map(fromStored));
+      const target = scrollTo.current;
+      const i = target ? pages.findIndex((p) => p.id === target) : -1;
+      if (i >= 0) {
+        scrollTo.current = null;
+        engine.scrollToPage(i);
+      }
+    });
+    return () => {
+      live = false;
+    };
+  }, [engine, pages]);
 
   const setTool = (tool: InkTool) => {
-    const engine = engineRef.current;
     if (!engine) return;
-    const prefs = { ...DEFAULT_PREFS, ...readPref<Partial<PenPrefs>>(PREF_KEY, {}) };
+    const p = prefs();
     // Switching between pens and the highlighter brings back that tool's last colour.
-    const wasHighlighter = (HIGHLIGHTER_COLOUR_KEYS as readonly string[]).includes(engine.colour);
-    if (tool === 'highlighter' && !wasHighlighter) engine.setColour(prefs.highlighter);
-    if (tool !== 'highlighter' && tool !== 'eraser' && wasHighlighter) engine.setColour(prefs.pen);
+    const wasHighlighter = isHighlighterColour(engine.colour);
+    if (tool === 'highlighter' && !wasHighlighter) engine.setColour(p.highlighter);
+    if (tool !== 'highlighter' && tool !== 'eraser' && tool !== 'lasso' && wasHighlighter) engine.setColour(p.pen);
     engine.setTool(tool);
     remember({ tool });
   };
 
   const setColour = (colour: string) => {
-    const engine = engineRef.current;
     if (!engine) return;
     engine.setColour(colour);
-    const isHighlighter = engine.tool === 'highlighter' || (HIGHLIGHTER_COLOUR_KEYS as readonly string[]).includes(colour);
-    remember(isHighlighter ? { highlighter: colour } : { pen: colour });
+    remember(engine.tool === 'highlighter' ? { highlighter: colour } : { pen: colour });
   };
 
   const setSize = (size: number) => {
-    engineRef.current?.setSize(size);
+    engine?.setSize(size);
     remember({ size });
   };
 
-  const undo = () => {
-    if (engineRef.current?.undo()) setAnnouncement('Undone.');
-  };
-  const redo = () => {
-    if (engineRef.current?.redo()) setAnnouncement('Redone.');
+  const pickFavourite = (f: Favourite) => {
+    if (!engine) return;
+    engine.setTool(f.tool);
+    engine.setColour(f.colour);
+    engine.setSize(f.size);
+    remember({ tool: f.tool, size: f.size, ...(f.tool === 'highlighter' ? { highlighter: f.colour } : { pen: f.colour }) });
   };
 
-  /** Keys while the canvas or toolbar has focus. Handled here so app-wide undo doesn't also run. */
+  const undo = () => engine?.undo() && say('Undone.');
+  const redo = () => engine?.redo() && say('Redone.');
+
+  /** Keys while the canvas or toolbar has focus. Handled here so app-wide shortcuts don't also run. */
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    const engine = engineRef.current;
-    if (!engine || isTypingTarget(e.target)) return;
+    if (!engine || isTypingTarget(e.target) || dialog) return;
     const mod = e.metaKey || e.ctrlKey;
     const k = e.key.toLowerCase();
     const handled = () => {
       e.preventDefault();
       e.stopPropagation();
     };
+    const sel = engine.state.selection;
     if (mod && k === 'z') return void (handled(), e.shiftKey ? redo() : undo());
     if (mod && k === 'y') return void (handled(), redo());
+    if (mod && k === 'a') return void (handled(), engine.selectAll(), say('Everything on this page is selected.'));
+    if (mod && k === 'v') return void (handled(), engine.paste() && say('Pasted.'));
+    if (sel && mod && k === 'c') return void (handled(), engine.copySelection(), say('Copied.'));
+    if (sel && mod && k === 'x') return void (handled(), engine.cutSelection(), say('Cut.'));
+    if (sel && mod && k === 'd') return void (handled(), engine.duplicateSelection(), say('Duplicated.'));
     if (mod || e.altKey) return;
-    const onCanvas = e.target === hostRef.current;
-    if (onCanvas) {
-      const pan: Record<string, [number, number]> = {
-        ArrowUp: [0, PAN_STEP],
-        ArrowDown: [0, -PAN_STEP],
-        ArrowLeft: [PAN_STEP, 0],
-        ArrowRight: [-PAN_STEP, 0],
-        PageUp: [0, hostRef.current!.clientHeight * 0.9],
-        PageDown: [0, -hostRef.current!.clientHeight * 0.9],
-      };
-      const d = pan[e.key];
-      if (d) return void (handled(), engine.panBy(d[0], d[1]));
+    if (sel && (e.key === 'Delete' || e.key === 'Backspace')) return void (handled(), engine.deleteSelection(), say('Deleted.'));
+    if (sel && e.key === 'Escape') return void (handled(), engine.clearSelection());
+    const arrows: Record<string, [number, number]> = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
+    const arrow = arrows[e.key];
+    if (e.target === hostRef.current) {
+      const step = e.shiftKey ? 10 : 1;
+      if (arrow && sel) return void (handled(), engine.nudgeSelection(arrow[0] * step, arrow[1] * step));
+      if (arrow) return void (handled(), engine.panBy(-arrow[0] * PAN_STEP, -arrow[1] * PAN_STEP));
+      const h = hostRef.current.clientHeight * 0.9;
+      if (e.key === 'PageUp') return void (handled(), engine.panBy(0, h));
+      if (e.key === 'PageDown') return void (handled(), engine.panBy(0, -h));
     }
     if (e.key === '+' || e.key === '=') return void (handled(), engine.zoomBy(1.25));
     if (e.key === '-') return void (handled(), engine.zoomBy(0.8));
@@ -199,15 +240,31 @@ export function InkEditor({ item }: { item: Item }) {
   return (
     <div className="flex h-full min-h-0 flex-col" onKeyDown={onKeyDown}>
       <TitleField item={item} />
-      {state && (
+      {engine && state && (
         <InkToolbar
           state={state}
+          favourites={favourites}
           onTool={setTool}
           onColour={setColour}
           onSize={setSize}
+          onEraser={(mode, only) => {
+            engine.setEraser(mode, only);
+            remember({ eraser: mode, eraseHighlighterOnly: only });
+          }}
+          onFavourite={pickFavourite}
+          onAddFavourite={() => {
+            if (state.tool === 'eraser' || state.tool === 'lasso') return;
+            setFavourites(addFavourite(favourites, { tool: state.tool, colour: state.colour, size: state.size }));
+            say('Added to favourites.');
+          }}
+          onRemoveFavourite={(i) => setFavourites(removeFavourite(favourites, i))}
           onUndo={undo}
           onRedo={redo}
-          onAddPage={() => appendPageRef.current()}
+          onAddPage={() => void appendPage(false)}
+          onPages={() => setDialog('pages')}
+          onPaper={() => setDialog('paper')}
+          onPaste={() => engine.paste() && say('Pasted.')}
+          onSelectAll={() => engine.selectAll()}
         />
       )}
       <div className="relative min-h-0 flex-1">
@@ -216,26 +273,42 @@ export function InkEditor({ item }: { item: Item }) {
           tabIndex={0}
           role="application"
           aria-roledescription="drawing canvas"
-          aria-label="Ink pages. Write with a pen, mouse or finger; two fingers move and zoom. Arrow keys scroll, plus and minus zoom, P F M H E pick a tool."
+          aria-label="Ink pages. Write with a pen, mouse or finger; two fingers move and zoom. Arrow keys scroll, plus and minus zoom, P F M H E L pick a tool."
           data-testid="ink-canvas"
-          className="absolute inset-0 touch-none overflow-hidden bg-desk outline-none select-none [-webkit-touch-callout:none] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus"
+          className="absolute inset-0 touch-none overflow-hidden bg-desk outline-none select-none [-webkit-touch-callout:none] focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset"
         />
-        {!pages && <p className="absolute inset-x-0 top-8 text-center text-sm text-muted">Opening…</p>}
-        {state && (
+        {!engine && <p className="absolute inset-x-0 top-8 text-center text-sm text-muted">Opening…</p>}
+        {engine && state?.selection && (
+          <SelectionBar
+            selection={state.selection}
+            onColour={(colour) => engine.restyleSelection({ colour })}
+            onSize={(size) => engine.restyleSelection({ size })}
+            onDuplicate={() => engine.duplicateSelection()}
+            onCopy={() => engine.copySelection() && say('Copied.')}
+            onCut={() => engine.cutSelection()}
+            onDelete={() => engine.deleteSelection()}
+            onDone={() => engine.clearSelection()}
+          />
+        )}
+        {engine && state && (
           <div className="absolute right-2 bottom-2 flex items-center gap-0.5 rounded-panel border border-border bg-surface/95 p-0.5 text-sm shadow">
-            <span className="px-2 text-muted">
+            <button
+              type="button"
+              className="rounded px-2 py-1.5 text-muted outline-none hover:text-text focus-visible:ring-2 focus-visible:ring-focus"
+              onClick={() => setDialog('pages')}
+            >
               Page {state.page + 1} of {state.pageCount}
-            </span>
-            <IconButton label="Zoom out" size="sm" onPress={() => engineRef.current?.zoomBy(0.8)}>
+            </button>
+            <IconButton label="Zoom out" size="sm" onPress={() => engine.zoomBy(0.8)}>
               <Minus size={16} />
             </IconButton>
             <span className="w-12 text-center tabular-nums" aria-label={`Zoom ${Math.round(state.zoom * 100)} percent`}>
               {Math.round(state.zoom * 100)}%
             </span>
-            <IconButton label="Zoom in" size="sm" onPress={() => engineRef.current?.zoomBy(1.25)}>
+            <IconButton label="Zoom in" size="sm" onPress={() => engine.zoomBy(1.25)}>
               <Plus size={16} />
             </IconButton>
-            <IconButton label="Fit page width" size="sm" onPress={() => engineRef.current?.fit()}>
+            <IconButton label="Fit page width" size="sm" onPress={() => engine.fit()}>
               <Maximize size={16} />
             </IconButton>
           </div>
@@ -244,6 +317,24 @@ export function InkEditor({ item }: { item: Item }) {
           {announcement}
         </span>
       </div>
+      {engine && dialog === 'pages' && (
+        <PageSorter
+          itemId={itemId}
+          engine={engine}
+          layout={state?.layout ?? 0}
+          onClose={() => setDialog(null)}
+          onGoTo={(i) => {
+            setDialog(null);
+            engine.scrollToPage(i);
+          }}
+        />
+      )}
+      {engine && dialog === 'paper' && <PaperDialogFor engine={engine} itemId={itemId} onClose={() => setDialog(null)} />}
     </div>
   );
+}
+
+function PaperDialogFor({ engine, itemId, onClose }: { engine: InkEngine; itemId: string; onClose: () => void }) {
+  const [page] = useState(() => engine.currentPage());
+  return page ? <PaperDialog itemId={itemId} page={page} onClose={onClose} /> : null;
 }

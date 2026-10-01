@@ -1,4 +1,5 @@
-import { fromStored, InkModel, makeStroke, toStored, type InkStroke } from './model';
+import { boundsOfStrokes, fromStored, InkModel, makeStroke, splitStroke, toStored, transformStroke, type InkStroke } from './model';
+import { rotateAbout, scaleAbout, translate } from './geometry';
 import { newId } from '@/lib/ids';
 
 const line = (pageId: string, y: number, x0 = 0, x1 = 100): InkStroke =>
@@ -69,5 +70,60 @@ describe('ink model', () => {
     expect(back.points[3]!.y).toBeCloseTo(33.5, 1);
     expect(toStored(s).opacity).toBe(1);
     expect(fromStored({ ...toStored(s), pressure: undefined }).pressure).toBe(true);
+  });
+});
+
+describe('ink tools on the model', () => {
+  it('precise erase cuts a gap and the pieces keep the stroke’s place', () => {
+    const [a, b, c] = [line('p', 10), line('p', 10), line('p', 50)];
+    const m = new InkModel([a, b, c]);
+    const pieces = splitStroke(b, 50, 10, 4)!;
+    expect(pieces).toHaveLength(2);
+    expect(pieces[0]!.points.at(-1)!.x).toBeLessThan(50 - 4);
+    expect(pieces[1]!.points[0]!.x).toBeGreaterThan(50 + 4);
+    expect(pieces[1]!.points[0]!.t).toBe(0);
+    m.commit({ added: pieces, removed: [b] });
+    expect(m.strokes('p').map((s) => s.id)).toEqual([a.id, ...pieces.map((s) => s.id), c.id]);
+    expect(splitStroke(b, 50, 300, 4)).toBeNull();
+    // Erasing the whole thing leaves nothing.
+    expect(splitStroke(line('p', 0, 0, 4), 2, 0, 10)).toEqual([]);
+  });
+
+  it('lasso picks strokes mostly inside the loop', () => {
+    const a = line('p', 10);
+    const b = line('p', 100);
+    const m = new InkModel([a, b]);
+    const loop = [
+      { x: -10, y: -10 },
+      { x: 35, y: -10 },
+      { x: 35, y: 40 },
+      { x: -10, y: 40 },
+    ];
+    expect(m.inPolygon('p', loop)).toEqual([]); // only 4 of its 11 points are inside
+    const wide = loop.map((p) => ({ ...p, x: p.x === 35 ? 120 : p.x }));
+    expect(m.inPolygon('p', wide)).toEqual([a]);
+  });
+
+  it('moves, scales and rotates strokes, scaling their thickness too', () => {
+    const s = line('p', 0, 0, 100);
+    const moved = transformStroke(s, translate(10, 20));
+    expect(moved.id).toBe(s.id);
+    expect(moved.points[0]).toMatchObject({ x: 10, y: 20 });
+    const big = transformStroke(s, scaleAbout(2, 0, 0));
+    expect(big.points.at(-1)!.x).toBe(200);
+    expect(big.size).toBe(2);
+    const turned = transformStroke(s, rotateAbout(Math.PI / 2, 0, 0));
+    expect(turned.points.at(-1)!.x).toBeCloseTo(0);
+    expect(turned.points.at(-1)!.y).toBeCloseTo(100);
+    expect(boundsOfStrokes([s, moved])!.maxY).toBeGreaterThan(20);
+  });
+
+  it('dropping a page also drops it from the history', () => {
+    const m = new InkModel();
+    m.commit({ added: [line('gone', 1)], removed: [] });
+    m.commit({ added: [line('kept', 1)], removed: [] });
+    m.dropPage('gone');
+    expect(m.undo()!.removed[0]!.pageId).toBe('kept');
+    expect(m.canUndo).toBe(false);
   });
 });

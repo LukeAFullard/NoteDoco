@@ -106,3 +106,41 @@ describe('ink notes', () => {
     expect(pages).toHaveLength(1);
   });
 });
+
+describe('ink pages with undo', () => {
+  it('deletes, moves, duplicates and re-papers pages, and undoes each', async () => {
+    const { deletePageWithUndo, duplicatePageWithUndo, movePageWithUndo, setPaperWithUndo } = await import('./actions');
+    const { undo } = await import('./undo');
+    const id = await createItem({ kind: 'ink' });
+    const p1 = (await loadInk(id)).pages[0]!;
+    const p2 = await addPage(id);
+    await saveStrokes(id, [stroke(p2.id), stroke(p2.id)], []);
+    const order = async () => (await loadInk(id)).pages.map((p) => p.id);
+
+    expect(await deletePageWithUndo(id, p2.id)).toBe('Page deleted');
+    expect(await order()).toEqual([p1.id]);
+    expect(await db.strokes.count()).toBe(0);
+    expect(await deletePageWithUndo(id, p1.id)).toBeNull(); // the last page stays
+    await undo();
+    expect(await order()).toEqual([p1.id, p2.id]);
+    expect(await db.strokes.count()).toBe(2);
+
+    await movePageWithUndo(id, p2.id, p1.id);
+    expect(await order()).toEqual([p2.id, p1.id]);
+    await undo();
+    expect(await order()).toEqual([p1.id, p2.id]);
+
+    const dup = (await duplicatePageWithUndo(id, p2.id))!;
+    expect(await order()).toEqual([p1.id, p2.id, dup.pageId]);
+    expect(await db.strokes.where('pageId').equals(dup.pageId).count()).toBe(2);
+    await undo();
+    expect(await order()).toEqual([p1.id, p2.id]);
+    expect(await db.strokes.count()).toBe(2);
+
+    await setPaperWithUndo(id, { size: 'letter', template: 'dot', colour: 'dark' });
+    expect((await loadInk(id)).pages.every((p) => p.paper.template === 'dot')).toBe(true);
+    await undo();
+    expect((await loadInk(id)).pages.every((p) => p.paper.template === 'blank')).toBe(true);
+    expect((await loadInk(id)).doc.paper.template).toBe('blank');
+  });
+});

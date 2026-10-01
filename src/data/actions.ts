@@ -3,7 +3,8 @@ import { createItem, duplicateItem, moveItem, restoreItems, trashItems, updateIt
 import { moveGroup, restoreGroup, trashGroup, updateGroup } from './repos/groups';
 import { db } from './db';
 import { touched } from './meta';
-import type { Id, Item, LocalDate, TimeSpan } from './types';
+import type { Id, Item, LocalDate, Paper, TimeSpan } from './types';
+import * as ink from './repos/ink';
 import type { ColourKey } from '@/lib/palette';
 import { completeItem, getBodyText, reopenItem, setChecklistLineDate, toggleChecklistLine, type CompleteResult } from './repos/time';
 import { setBodyText } from './repos/items';
@@ -279,4 +280,40 @@ export async function reschedulePlacedWithUndo(
   const pad = (n: number) => String(n).padStart(2, '0');
   const day = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   return moveChecklistLineWithUndo(placed.line.itemId, Number(placed.line.anchor), to.allDay ? to.start : `${day}T${pad(d.getHours())}:${pad(d.getMinutes())}`);
+}
+
+// ---- Ink pages (P3.5) ---------------------------------------------------------
+
+export async function deletePageWithUndo(itemId: Id, pageId: Id): Promise<string | null> {
+  const snap = await ink.deletePage(itemId, pageId);
+  if (!snap) return null;
+  recordUndo({ label: 'Delete page', undo: () => ink.restorePage(snap), redo: async () => void (await ink.deletePage(itemId, pageId)) });
+  return 'Page deleted';
+}
+
+export async function movePageWithUndo(itemId: Id, pageId: Id, beforeId: Id | null): Promise<string | null> {
+  const old = await ink.movePage(itemId, pageId, beforeId);
+  if (old === null) return null;
+  const moved = (await db.inkPages.get(pageId))!.order;
+  recordUndo({ label: 'Move page', undo: () => ink.setPageOrder(itemId, pageId, old), redo: () => ink.setPageOrder(itemId, pageId, moved) });
+  return 'Page moved';
+}
+
+export async function duplicatePageWithUndo(itemId: Id, pageId: Id): Promise<{ label: string; pageId: Id } | null> {
+  const copy = await ink.duplicatePage(itemId, pageId);
+  if (!copy) return null;
+  const strokes = await db.strokes.where('pageId').equals(copy.id).toArray();
+  recordUndo({
+    label: 'Duplicate page',
+    undo: () => ink.removePage(itemId, copy.id),
+    redo: () => ink.restorePage({ itemId, page: copy, strokes }),
+  });
+  return { label: 'Page duplicated', pageId: copy.id };
+}
+
+export async function setPaperWithUndo(itemId: Id, paper: Paper, pageIds?: Id[]): Promise<string> {
+  const before = await ink.paperOf(itemId);
+  await ink.setPaper(itemId, paper, pageIds);
+  if (before) recordUndo({ label: 'Change paper', undo: () => ink.restorePaper(itemId, before), redo: () => ink.setPaper(itemId, paper, pageIds) });
+  return 'Paper changed';
 }
