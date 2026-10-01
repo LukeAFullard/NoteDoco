@@ -1,7 +1,7 @@
 name: Deploy to GitHub Pages
 
-# Publishes v1 at /NoteDoco/ and the v2 preview (app/) at /NoteDoco/next/.
-# When v2 reaches milestone M1 it moves to the root and v1 is retired (docs/decisions/0002).
+# Publishes NoteDoco at /NoteDoco/. /NoteDoco/next/ (where the v2 preview used to be) only
+# redirects there; see public/next/ and docs/decisions/0007.
 
 on:
   push:
@@ -29,37 +29,20 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            app/package-lock.json
 
-      - name: Install and test v1
-        run: |
-          npm ci
-          npm run test
-
-      - name: Build v1
-        run: npm run build
-        env:
-          VITE_BASE_PATH: /NoteDoco/
-
-      - name: Install and test v2
-        working-directory: app
+      - name: Install and test
         run: |
           npm ci
           npm run lint
           npm run typecheck
           npm run test
 
-      - name: Build v2 into /next/
-        working-directory: app
+      - name: Build
         run: |
           npm run build
           npm run size
-          mkdir -p ../dist/next
-          cp -r dist/. ../dist/next/
         env:
-          VITE_BASE_PATH: /NoteDoco/next/
+          VITE_BASE_PATH: /NoteDoco/
 
       - name: Upload build artifact
         uses: actions/upload-pages-artifact@v3

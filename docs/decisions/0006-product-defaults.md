@@ -12,4 +12,4 @@
 | D6 Handwriting recognition | On-device only |
 | D7 TimeDoco bridge | Parked until after v2.0; the link stays |
 | D8 v1 users | Assume yes; migrate v1 data automatically |
-| D9 Switch-over | Superseded by 0002 (`app/` + `/next/` preview instead of a branch) |
+| D9 Switch-over | Superseded by 0002 (`app/` + `/next/` preview instead of a branch); done at M1 (0007) |

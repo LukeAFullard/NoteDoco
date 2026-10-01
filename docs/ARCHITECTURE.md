@@ -212,7 +212,7 @@ Later options, to be recorded in an ADR at that phase:
 - **TipTap 3:** StarterKit, task list, table, code block (lowlight), image (required: without it images are silently dropped), link, placeholder, plus custom nodes:
   - `SketchBlock`: an inline ink document (NOTE-8)
   - `DateChip`: `@fri` → a date, from `chrono-node`
-  - `WikiLink`: the node ships in Phase 1 so `[[links]]` are stored unescaped; link features come in Phase 5 (prototype: `app/src/spikes/wikiLink.ts`)
+  - `WikiLink`: the node ships in Phase 1 so `[[links]]` are stored unescaped; link features come in Phase 5 (prototype: `src/spikes/wikiLink.ts`)
 - **Markdown is the canonical storage.** Custom nodes stay readable as plain Markdown:
   - Sketch: `![sketch](ndoco:ink/<id>)`. On export this becomes `assets/<id>.svg`.
   - Date chip: `@2026-10-03`, readable as text and re-parsed on load.
@@ -317,7 +317,7 @@ How strokes are drawn:
 
 ## 11. Search
 
-> Built in Phase 1: `app/src/search/` (index, query parser) and `app/src/workers/search.worker.ts`. The worker re-syncs on Dexie's `storagemutated` event, so edits in any tab reach it.
+> Built in Phase 1: `src/search/` (index, query parser) and `src/workers/search.worker.ts`. The worker re-syncs on Dexie's `storagemutated` event, so edits in any tab reach it.
 
 - **Index:** MiniSearch in a Web Worker. Fields: title (boost 3), body text (markdown stripped), sticky text, tags (boost 2), attachment names. Later, recognised handwriting and OCR text.
 - **Updates:** repositories post changes to the worker after each write. The index snapshot is persisted so startup doesn't re-index, and it's rebuilt when the schema version changes.
@@ -325,7 +325,7 @@ How strokes are drawn:
 
 ## 12. Reminders and notifications (honest limits)
 
-> Built in Phase 2: `features/reminders/`. A timer is set for the next reminder and re-set on every data change (a Dexie live query). Reminders more than two minutes late when the app starts go to "While you were away" instead of firing. `public/sw-notifications.js` is imported into the generated service worker to open the item when a notification is clicked. The app-icon badge counts overdue items where `setAppBadge` exists. `lib/ics.ts` writes RFC 5545 files with repeats and alarms.
+> Built in Phase 2: `features/reminders/`. A timer is set for the next reminder and re-set on every data change (a Dexie live query). Reminders more than two minutes late when the app starts go to "While you were away" instead of firing. `public/sw-extras.js` is imported into the generated service worker to open the item when a notification is clicked (and to take over from v1 at once; see decision 0007). The app-icon badge counts overdue items where `setAppBadge` exists. `lib/ics.ts` writes RFC 5545 files with repeats and alarms.
 
 A static web app can't reliably fire a notification at an exact time while it's closed:
 
@@ -357,7 +357,7 @@ So the design is:
 
 | Format | Direction | Notes |
 |---|---|---|
-| Backup `notedoco-backup-YYYY-MM-DD.zip` | Both | `manifest.json` (format, versions, counts), `data/<table>.json` (binary fields as base64), `attachments/<id>` as real files. Restore by merge (newest `updatedAt` wins; bodies follow their item) or replace. Built: `app/src/backup/backup.ts` |
+| Backup `notedoco-backup-YYYY-MM-DD.zip` | Both | `manifest.json` (format, versions, counts), `data/<table>.json` (binary fields as base64), `attachments/<id>` as real files. Restore by merge (newest `updatedAt` wins; bodies follow their item) or replace. Built: `src/backup/backup.ts` |
 | Markdown `.md` with YAML front matter | Both | Front matter holds id, group, tags, dates, colour; sketches exported as SVG assets |
 | Plain text `.txt` | Both | — |
 | PDF / SVG / PNG | Export | Ink pages (vector PDF via `pdf-lib`), boards, timeline (P5) |
@@ -403,6 +403,8 @@ CI enforces what it can: a bundle-size check on every PR, and Playwright perform
   - iPhone and an Android phone
 
 ## 18. Migration from v1
+
+> Live since M1 (27 Sep 2026, decision 0007): v2 is served at `/NoteDoco/`, where v1 was. The migration runs on every start (it only adds, and records v1 ids so nothing is added twice), so a device that last opened v1 months ago still gets its notes. Installed v1 apps update in place; `/NoteDoco/next/` redirects and retires the old preview's service worker (`public/next/`).
 
 - On first run, open `note-doco-db` if it exists (the same GitHub Pages origin and path) and read every store.
 - **Mapping:**

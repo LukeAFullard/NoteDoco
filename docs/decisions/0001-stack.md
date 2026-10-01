@@ -14,5 +14,5 @@ v2 is a rebuild (see `PROJECT_PLAN.md` §13). It must run fully in the browser, 
 - Full rationale and alternatives: `docs/ARCHITECTURE.md` §2.
 
 ## Consequences
-- Heavy modules (editor, ink, PDF, calendar) must be lazy-loaded; CI fails if startup JavaScript exceeds 200 KB gzipped (`app/scripts/check-bundle.mjs`). At the end of Phase 0 it is 187 KB, so every new startup dependency needs a look.
+- Heavy modules (editor, ink, PDF, calendar) must be lazy-loaded; CI fails if startup JavaScript exceeds 200 KB gzipped (`scripts/check-bundle.mjs`). At the end of Phase 0 it is 187 KB, so every new startup dependency needs a look.
 - TypeScript 7 removed `baseUrl`; path aliases use `paths` with `./` prefixes.

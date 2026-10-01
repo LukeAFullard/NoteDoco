@@ -6,7 +6,7 @@
 Handwriting is the riskiest feature. The obvious canvas SDK (tldraw) needs a licence key in production and a paid licence for commercial use, and handwriting needs control a whiteboard SDK doesn't give (pages, palm rejection, pen buttons).
 
 ## Decision (proposed)
-Build our own engine: Pointer Events with full-rate (coalesced) and predicted samples, a heuristic palm-rejection router, `perfect-freehand` outlines, dry and wet canvas layers, `rbush` for hit-testing, and compact varint point storage. The ink lab (`app/src/lab/ink/`) is the prototype; the reusable parts are already in `app/src/canvas/`.
+Build our own engine: Pointer Events with full-rate (coalesced) and predicted samples, a heuristic palm-rejection router, `perfect-freehand` outlines, dry and wet canvas layers, `rbush` for hit-testing, and compact varint point storage. The ink lab (`src/lab/ink/`) is the prototype; the reusable parts are already in `src/canvas/`.
 
 ## Go/no-go criteria (from real devices)
 - **iPad + Apple Pencil (Safari, installed):** pen samples at ≥ 200/s with full-rate samples on; no stray marks from a resting palm over a page of writing; the owner judges the feel "close to a native notes app".
