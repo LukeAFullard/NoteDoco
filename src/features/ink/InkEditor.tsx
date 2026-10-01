@@ -61,8 +61,12 @@ const isHighlighterColour = (c: string) => (HIGHLIGHTER_COLOUR_KEYS as readonly 
  * Saves strokes in order, one action at a time. If storage fails, says so (decision 0003):
  * nothing is kept only in memory without the user knowing.
  */
-function useStrokeSaver(itemId: string) {
+function useStrokeSaver(itemId: string, onSaved: () => void) {
   const queue = useRef<Promise<void>>(Promise.resolve());
+  const saved = useRef(onSaved);
+  useLayoutEffect(() => {
+    saved.current = onSaved;
+  });
   return useCallback(
     (c: StrokeChange) => {
       queue.current = queue.current
@@ -71,6 +75,7 @@ function useStrokeSaver(itemId: string) {
           console.error(err);
           showToast({ message: 'Your latest ink couldn’t be saved. Check that storage isn’t full, then keep writing.', tone: 'danger' }, 0);
         });
+      void queue.current.then(() => saved.current());
     },
     [itemId],
   );
@@ -122,7 +127,10 @@ export function InkSurface({ itemId, docId: sketchId, block = false }: { itemId:
   const known = useRef(new Set<string>());
   const scrollTo = useRef<string | null>(null);
   const adding = useRef(false);
-  const save = useStrokeSaver(itemId);
+  // Ink notes get a fresh thumbnail for cards and the timeline a little after writing stops.
+  const thumb = useDebouncedSave(() => (block ? undefined : import('./thumbnail').then((m) => m.updateThumbnail(itemId))), 2500);
+  const scheduleThumb = thumb.schedule; // stable
+  const save = useStrokeSaver(itemId, () => scheduleThumb(undefined));
   const say = (msg: string) => setAnnouncement(msg);
   // Tapping away from a text box being edited only finishes it; it doesn't start another.
   const setEditing = useCallback((d: DraftText | null) => {
@@ -200,6 +208,7 @@ export function InkSurface({ itemId, docId: sketchId, block = false }: { itemId:
         created.setEraser(p.eraser, p.eraseHighlighterOnly);
         known.current = new Set(pages.map((pg) => pg.id));
         setDocId(doc.id);
+        if (!block && (strokes.length || elements.length)) void db.items.get(itemId).then((it) => it && !it.thumbnailId && scheduleThumb(undefined));
         setEngine(created);
       })
       .catch((err: unknown) => {
@@ -210,7 +219,7 @@ export function InkSurface({ itemId, docId: sketchId, block = false }: { itemId:
       created?.destroy();
       setEngine(null);
     };
-  }, [itemId, sketchId, block, save, appendPage, placeText]);
+  }, [itemId, sketchId, block, save, appendPage, placeText, scheduleThumb]);
 
   // Pages come from storage, so undo from a toast, the page sorter and other panes all show up.
   const pages = useLiveQuery(() => (docId ? listPages(docId) : undefined), [docId]);
@@ -388,6 +397,10 @@ export function InkSurface({ itemId, docId: sketchId, block = false }: { itemId:
           onPaste={() => engine.paste() && say('Pasted.')}
           onSelectAll={() => engine.selectAll()}
           onInsertImage={() => fileInput.current?.click()}
+          onExport={(kind) => {
+            say(kind === 'print' ? 'Preparing to print…' : 'Exporting…');
+            void import('./exportInk').then((m) => m.exportInk(kind, itemId, { docId: sketchId, page: state.page }));
+          }}
         />
       )}
       <div className="relative min-h-0 flex-1">

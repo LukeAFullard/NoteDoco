@@ -143,6 +143,11 @@ export function ItemActionsMenu({ items, onOpen, triggerLabel = 'Item actions' }
               <Download size={15} aria-hidden /> Export as {'Markdown'}
             </MenuItem>
           )}
+          {single?.kind === 'ink' && (
+            <MenuItem onAction={() => void import('@/features/ink/exportInk').then((m) => m.exportInk('pdf', single.id))}>
+              <Download size={15} aria-hidden /> Export as PDF
+            </MenuItem>
+          )}
           {single?.kind === 'sticky' && (
             <MenuItem onAction={async () => navigate(`/items/${await promoteToNote(single.id)}`)}>
               <FileText size={15} aria-hidden /> Make it a note

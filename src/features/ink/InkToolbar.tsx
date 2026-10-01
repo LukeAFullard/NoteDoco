@@ -1,4 +1,6 @@
-import { ClipboardPaste, Ellipsis, FilePlus2, Files, ImagePlus, NotebookText, Redo2, SquareDashedMousePointer, Star, Undo2 } from 'lucide-react';
+import { ClipboardPaste, Ellipsis, FileDown, FilePlus2, Files, ImageDown, ImagePlus, NotebookText, Printer, Redo2, SquareDashedMousePointer, Star, Undo2 } from 'lucide-react';
+import { Separator } from 'react-aria-components';
+import type { InkExport } from './exportInk';
 import { Radio, RadioGroup } from 'react-aria-components';
 import { IconButton } from '@/design/Button';
 import { Menu, MenuItem } from '@/design/Menu';
@@ -28,6 +30,7 @@ export interface ToolbarProps {
   onPaste: () => void;
   onSelectAll: () => void;
   onInsertImage: () => void;
+  onExport: (kind: InkExport) => void;
 }
 
 const isPen = (t: InkTool): t is PenTool => t !== 'eraser' && t !== 'lasso' && t !== 'text';
@@ -138,6 +141,19 @@ export function InkToolbar(p: ToolbarProps) {
           </MenuItem>
           <MenuItem textValue="Paste" onAction={p.onPaste} isDisabled={!state.canPaste}>
             <ClipboardPaste size={15} aria-hidden /> Paste
+          </MenuItem>
+          <Separator className="my-1 h-px bg-border" />
+          <MenuItem textValue="Export as PDF" onAction={() => p.onExport('pdf')}>
+            <FileDown size={15} aria-hidden /> Export as PDF
+          </MenuItem>
+          <MenuItem textValue="Export as SVG" onAction={() => p.onExport('svg')}>
+            <FileDown size={15} aria-hidden /> Export as SVG
+          </MenuItem>
+          <MenuItem textValue="Export this page as PNG" onAction={() => p.onExport('png')}>
+            <ImageDown size={15} aria-hidden /> Export {p.block ? 'as' : 'this page as'} PNG
+          </MenuItem>
+          <MenuItem textValue="Print" onAction={() => p.onExport('print')}>
+            <Printer size={15} aria-hidden /> Print…
           </MenuItem>
         </Menu>
       </span>

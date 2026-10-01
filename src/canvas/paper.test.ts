@@ -33,3 +33,13 @@ describe('page layout', () => {
     expect(pageAt([], 0, 0)).toBeNull();
   });
 });
+
+describe('text wrapping', () => {
+  it('wraps words to the width and keeps line breaks', async () => {
+    const { wrapText } = await import('./render');
+    const measure = (s: string) => s.length * 10;
+    expect(wrapText('one two three four', 90, measure)).toEqual(['one two', 'three', 'four']);
+    expect(wrapText('a\n\nb', 100, measure)).toEqual(['a', '', 'b']);
+    expect(wrapText('unbreakablewordhere', 50, measure)).toEqual(['unbreakablewordhere']);
+  });
+});

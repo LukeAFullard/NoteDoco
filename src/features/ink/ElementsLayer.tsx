@@ -4,7 +4,7 @@ import type { InkEngine, InkTool } from '@/canvas/engine';
 import type { PageBox } from '@/canvas/paper';
 import { resolveInk } from '@/canvas/inkColours';
 import type { InkElement } from '@/data/types';
-import { objectUrlFor } from '@/data/repos/attachments';
+import { useAttachmentUrl } from '@/data/hooks';
 import { cn } from '@/design/cn';
 
 /**
@@ -16,18 +16,6 @@ import { cn } from '@/design/cn';
 
 const LINE_HEIGHT = 1.35;
 const MIN_W = 40;
-
-function useObjectUrl(id: string | null) {
-  const [url, setUrl] = useState<string | null>(null);
-  useEffect(() => {
-    let live = true;
-    if (id) void objectUrlFor(id).then((u) => live && setUrl(u));
-    return () => {
-      live = false;
-    };
-  }, [id]);
-  return url;
-}
 
 const textStyle = (el: InkElement, box: PageBox): CSSProperties => ({
   fontSize: el.fontSize,
@@ -94,7 +82,7 @@ function ElementView({
   onSelect: () => void;
   onEdit: () => void;
 }) {
-  const url = useObjectUrl(el.kind === 'image' ? el.attachmentId : null);
+  const url = useAttachmentUrl(el.kind === 'image' ? el.attachmentId : null);
   const [preview, setPreview] = useState<InkElement | null>(null);
   const drag = useRef<{ mode: 'move' | 'resize'; x: number; y: number; moved: boolean } | null>(null);
   const shown = preview ?? el;

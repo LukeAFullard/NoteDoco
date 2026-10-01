@@ -227,6 +227,39 @@ test.describe('ink notes', () => {
     await expect(img).toBeVisible();
   });
 
+  test('exports PDF, SVG and PNG, and shows a thumbnail on cards', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'pen');
+    const canvas = await openNewInkNote(page);
+    await page.getByRole('textbox', { name: 'Title' }).fill('Exported');
+    const box = (await canvas.boundingBox())!;
+    const cdp = await page.context().newCDPSession(page);
+    await penStroke(cdp, wave(box.x + 100, box.y + 120));
+    await expect.poll(() => inkedPixels(page)).toBeGreaterThan(100);
+
+    const exportAs = async (name: string) => {
+      await page.getByRole('button', { name: 'Pages and more' }).click();
+      const download = page.waitForEvent('download');
+      await page.getByRole('menuitem', { name }).click();
+      return download;
+    };
+    const pdf = await exportAs('Export as PDF');
+    expect(pdf.suggestedFilename()).toBe('Exported.pdf');
+    const pdfText = (await (await import('node:fs/promises')).readFile((await pdf.path())!)).subarray(0, 5).toString();
+    expect(pdfText).toBe('%PDF-');
+    const svg = await exportAs('Export as SVG');
+    expect(svg.suggestedFilename()).toBe('Exported.svg');
+    expect((await (await import('node:fs/promises')).readFile((await svg.path())!, 'utf8')).match(/<path /g)?.length).toBe(1);
+    const png = await exportAs('Export this page as PNG');
+    expect(png.suggestedFilename()).toBe('Exported.png');
+
+    // A thumbnail appears on the note's card once writing has stopped for a moment.
+    await page.waitForTimeout(3500);
+    await page.goto('/#/inbox');
+    await page.getByRole('radio', { name: 'Cards' }).click();
+    const card = page.locator('[data-item-id]').filter({ hasText: 'Exported' });
+    await expect(card.locator('img')).toBeVisible();
+  });
+
   test('pages: sorter deletes with undo; paper changes to lined', async ({ page, isMobile }) => {
     test.skip(isMobile, 'pen');
     const canvas = await openNewInkNote(page);

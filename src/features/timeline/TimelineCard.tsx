@@ -5,6 +5,7 @@ import { cn } from '@/design/cn';
 import { formatSpan, isOverdue } from '@/lib/time';
 import { KIND_ICONS, itemTitle } from '@/features/items/kinds';
 import type { Detail } from './scale';
+import { Thumb } from '@/features/items/Thumb';
 
 import type { DragKind } from './drag';
 
@@ -39,6 +40,7 @@ export const TimelineCard = forwardRef<HTMLDivElement, TimelineCardProps>(functi
   const overdue = isOverdue(item) && !projected;
   const title = itemTitle(item.title, item.kind);
   const colour = item.colour ?? (sticky ? 'lemon' : null);
+  const thumb = detail === 'card' && horizontal && item.kind === 'ink' && !!item.thumbnailId;
   const handle = cn('absolute z-10 opacity-0 group-hover:opacity-100', horizontal ? 'inset-y-1 w-2 cursor-ew-resize' : 'inset-x-1 h-2 cursor-ns-resize');
 
   return (
@@ -64,9 +66,11 @@ export const TimelineCard = forwardRef<HTMLDivElement, TimelineCardProps>(functi
         projected && 'border-dashed opacity-80',
         dragging && 'opacity-30',
         ghost && 'z-30 shadow-lg ring-2 ring-focus',
+        thumb && 'pr-16',
         'cursor-grab active:cursor-grabbing',
       )}
     >
+      {thumb && <Thumb id={item.thumbnailId} className="absolute top-1 right-1 bottom-1 aspect-[4/3] rounded-[3px] border border-border object-cover object-top" />}
       {!sticky && colour && <span aria-hidden className={cn('absolute', horizontal ? 'inset-y-0 left-0 w-1' : 'inset-x-0 top-0 h-1')} style={{ background: `var(--sticky-${colour})` }} />}
       <span className={cn('flex min-w-0 items-center gap-1.5', detail === 'card' && 'font-medium')}>
         {!sticky && detail === 'card' && <Icon size={13} className="shrink-0 opacity-70" aria-hidden />}

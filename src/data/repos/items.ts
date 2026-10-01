@@ -2,7 +2,7 @@ import { db } from '../db';
 import { freshMeta, touched } from '../meta';
 import type { Id, Item, ItemKind, NoteBody, StickyBody, TimeSpan } from '../types';
 import { compareOrder, orderBetween } from '@/lib/order';
-import { nowIso } from '@/lib/ids';
+import { newId, nowIso } from '@/lib/ids';
 import type { ColourKey } from '@/lib/palette';
 import { analyseText } from '@/lib/textInfo';
 import { taskRefsFor } from '../taskRefs';
@@ -159,6 +159,9 @@ export async function duplicateItem(id: Id): Promise<Id> {
     size: sticky?.size,
   });
   if (it.kind === 'ink') await copyInk(id, copyId);
+  // The copy starts with the same thumbnail (its own copy of the picture).
+  const thumb = it.thumbnailId ? await db.attachments.get(it.thumbnailId) : undefined;
+  const thumbnailId = thumb ? (await db.attachments.add({ ...thumb, id: newId(), itemId: copyId })) : null;
   // Sketches in a typed note are copied too, so the copy can be edited on its own.
   if (note?.text.includes('ndoco:ink/')) await setBodyText(copyId, await copySketches(copyId, note.text));
   await db.transaction('rw', db.items, async () => {
@@ -166,7 +169,7 @@ export async function duplicateItem(id: Id): Promise<Id> {
     const sibs = await listItems(it.groupId);
     const next = sibs[sibs.findIndex((s) => s.id === id) + 1];
     const order = next && next.id !== copyId ? orderBetween(it.order, next.order) : copy.order;
-    await db.items.put({ ...copy, order, title: it.kind === 'ink' ? it.title : copy.title, preview: it.kind === 'ink' ? it.preview : copy.preview, manualTags: it.manualTags, tags: it.tags, when: it.when, due: it.due, task: it.task && { done: false, doneAt: null } });
+    await db.items.put({ ...copy, order, thumbnailId, title: it.kind === 'ink' ? it.title : copy.title, preview: it.kind === 'ink' ? it.preview : copy.preview, manualTags: it.manualTags, tags: it.tags, when: it.when, due: it.due, task: it.task && { done: false, doneAt: null } });
   });
   return copyId;
 }
