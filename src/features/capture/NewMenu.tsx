@@ -1,11 +1,11 @@
-import { FilePlus, FolderPlus, Plus, StickyNote } from 'lucide-react';
+import { FilePlus, FolderPlus, PenLine, Plus, StickyNote } from 'lucide-react';
 import { Menu, MenuItem } from '@/design/Menu';
 import { Button } from '@/design/Button';
 import { Kbd } from '@/design/Kbd';
 import { openNewGroup, useUi } from '@/app/ui';
 import { useCreate } from './useCreate';
 
-/** The "+ New" menu: note, sticky, group. */
+/** The "+ New" menu: note, ink note, sticky, group. */
 export function NewMenu({ className, compact, defaultOpen }: { className?: string; compact?: boolean; defaultOpen?: boolean }) {
   const create = useCreate();
   return (
@@ -20,6 +20,9 @@ export function NewMenu({ className, compact, defaultOpen }: { className?: strin
     >
       <MenuItem onAction={() => void create.note()}>
         <FilePlus size={15} aria-hidden /> <span className="flex-1">Note</span> <Kbd>N</Kbd>
+      </MenuItem>
+      <MenuItem onAction={() => void create.ink()}>
+        <PenLine size={15} aria-hidden /> <span className="flex-1">Ink note</span> <Kbd>D</Kbd>
       </MenuItem>
       <MenuItem onAction={() => void create.sticky()}>
         <StickyNote size={15} aria-hidden /> <span className="flex-1">Sticky</span> <Kbd>S</Kbd>

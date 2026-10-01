@@ -22,6 +22,7 @@ const CORPUS: Record<string, string> = {
   code: '```ts\nconst x: number = 1;\nconsole.log(x);\n```',
   table: '| Name | Qty |\n| --- | --- |\n| Apples | 3 |\n| Pears | 5 |',
   links: 'See [the plan](https://example.com/plan) and ![a sketch](assets/sketch.svg).',
+  sketchBlock: 'Before the drawing\n\n![sketch](ndoco:ink/0192c6d0-1234-7abc-8def-0123456789ab)\n\nAfter the drawing',
   rule: 'Above\n\n---\n\nBelow',
   hardBreak: 'Line one  \nLine two',
   escapes: 'Literal \\*stars\\* and \\_underscores\\_ and 5 \\* 3',
@@ -78,4 +79,9 @@ describe('markdown round trip', () => {
         .join('\n'),
     );
   });
+});
+
+it('keeps sketch block links exactly (NOTE-8)', () => {
+  const md = '![sketch](ndoco:ink/0192c6d0-1234-7abc-8def-0123456789ab)';
+  expect(roundTrip(`Notes\n\n${md}\n\nMore`).out).toContain(md);
 });

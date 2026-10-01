@@ -18,7 +18,9 @@ import { DateBadge, DoneToggle } from '@/features/time/DateBadge';
 import { noteExtensions } from './editor/extensions';
 import { Toolbar } from './editor/Toolbar';
 import { FindBar } from './editor/FindBar';
-import { INSERT_IMAGE_EVENT } from './editor/slashCommands';
+import { INSERT_IMAGE_EVENT, INSERT_SKETCH_EVENT } from './editor/slashCommands';
+import { createSketch, sketchUrl } from '@/data/repos/ink';
+import { openSketch } from '@/features/ink/sketchDialog';
 import { TagEditor } from '@/features/tags/TagEditor';
 import { SNAPSHOT_INTERVAL_MS, snapshotNote } from '@/data/repos/versions';
 import { HistoryDialog } from './HistoryDialog';
@@ -92,6 +94,19 @@ function RichEditor({ item, body, onChange, findOpen, setFindOpen }: {
     window.addEventListener(INSERT_IMAGE_EVENT, onInsert);
     return () => window.removeEventListener(INSERT_IMAGE_EVENT, onInsert);
   }, []);
+
+  // A sketch block (NOTE-8): a new ink document owned by this note, then straight into drawing.
+  useEffect(() => {
+    const onSketch = (ev: Event) => {
+      if (!editor || (ev as CustomEvent<{ editor: Editor }>).detail?.editor !== editor) return;
+      void createSketch(item.id).then((docId) => {
+        editor.chain().focus().insertContent([{ type: 'image', attrs: { src: sketchUrl(docId), alt: 'sketch' } }, { type: 'paragraph' }]).run();
+        openSketch(docId);
+      });
+    };
+    window.addEventListener(INSERT_SKETCH_EVENT, onSketch);
+    return () => window.removeEventListener(INSERT_SKETCH_EVENT, onSketch);
+  }, [editor, item.id]);
 
   if (!editor) return null;
   return (

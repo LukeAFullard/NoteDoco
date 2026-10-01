@@ -23,7 +23,7 @@ export interface BackupManifest {
 
 /** Tables in the backup. Attachments' blobs go in attachments/<id>; the rest is JSON. */
 const TABLES = [
-  'groups', 'items', 'noteBodies', 'stickyBodies', 'inkDocs', 'inkPages', 'strokes', 'boards',
+  'groups', 'items', 'noteBodies', 'stickyBodies', 'inkDocs', 'inkPages', 'strokes', 'inkElements', 'boards',
   'boardNodes', 'boardEdges', 'links', 'taskRefs', 'attachments', 'versions', 'layouts', 'settings',
 ] as const;
 type TableName = (typeof TABLES)[number];

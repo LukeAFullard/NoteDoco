@@ -11,6 +11,7 @@ import { Switch } from '@/design/Switch';
 import { useUi } from '@/app/ui';
 import { DataSection } from './DataSection';
 import { RemindersSettings } from '@/features/reminders/RemindersSettings';
+import { PenSettingsPanel } from '@/features/ink/PenSettingsPanel';
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -132,6 +133,9 @@ export function SettingsPage() {
           <Choice label="Week starts on" prefKey="weekStart" options={[{ value: 'auto', label: 'Automatic' }, { value: 'monday', label: 'Monday' }, { value: 'sunday', label: 'Sunday' }]} />
           <RemindersSettings />
         </div>
+      </Section>
+      <Section title="Pen & ink">
+        <PenSettingsPanel />
       </Section>
       <Section title="Backup & import">
         <DataSection />

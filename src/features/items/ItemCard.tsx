@@ -11,6 +11,7 @@ import { ItemActionsMenu } from './ItemMenu';
 import { openSticky } from '@/features/stickies/stickyDialog';
 import { canDrag, setDragItems } from '@/lib/dnd';
 import { useSelection } from './selection';
+import { Thumb } from './Thumb';
 import { CheckControl, DateBadge, DoneToggle } from '@/features/time/DateBadge';
 
 export type Density = 'row' | 'card';
@@ -223,7 +224,14 @@ export function ItemCard({ item, density, selected, selecting, onSelect, href }:
         <span className={cn('min-w-0 flex-1 truncate font-medium', !item.title && 'text-muted', item.task?.done && 'text-muted line-through')}>{itemTitle(item.title, item.kind)}</span>
         {item.pinned && <Pin size={12} className="shrink-0 text-accent" aria-label="Pinned" />}
       </div>
-      <p className="line-clamp-4 flex-1 text-sm text-muted">{item.preview}</p>
+      {item.kind === 'ink' && item.thumbnailId ? (
+        <div className="flex flex-1 flex-col gap-1">
+          <Thumb id={item.thumbnailId} className="h-28 w-full rounded border border-border object-cover object-top" />
+          <p className="text-xs text-muted">{item.preview}</p>
+        </div>
+      ) : (
+        <p className="line-clamp-4 flex-1 text-sm text-muted">{item.preview}</p>
+      )}
       {meta}
       {link}
       <span className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">

@@ -46,7 +46,12 @@ Guidance for anyone (people or AI coding agents) changing this repository. Read 
 - **A screen can be open in several panes at once** (split view). Document-level listeners (paste, keys, drops) must check `useIsActivePane()` or `useInPane()` from `src/app/paneContext.ts`, or they'll act in every pane.
 - **Never `new Date('2026-10-02')`:** that's midnight UTC, which is the previous day west of Greenwich. Use `fromLocalDate()`.
 - **e2e and the clock:** tests run at any time of day, so scroll time grids to the hours you need, and dismiss toasts before pointer work near the bottom of the screen.
-- **Heavy chunks** (editor ≈200 KB gz, search worker) are lazy; the editor is preloaded when idle.
+- **Heavy chunks** (editor ≈200 KB gz, search worker, PDF export ≈180 KB gz) are lazy; the editor is preloaded when idle.
+- **The ink engine listens to native pointer events** on its canvas host, and those run before React's handlers. DOM inside it (text boxes, images) must carry `data-ink-element`, or the engine draws under them.
+- **Focusing a new input after a tap:** the browser moves focus to the tapped element after `pointerdown`, so focus the new input on the next frame.
+- **Ink order is id order.** Stroke ids are UUIDv7, so sorting by id gives the stacking order. Pieces of a split stroke get `<id>~n` ids to keep their place; don't re-id strokes when changing them (move, recolour), or they jump to the top.
+- **pdf-lib mis-draws SVG's shorthand `T` curves:** give `drawSvgPath` explicit curves (`strokePath(…, true)`).
+- **Ink e2e:** send pen and touch input through `e2e/support/pen.ts` (DevTools protocol). The canvas has `data-strokes` with the stroke count, and strokes must start on the page (pages are centred, so the canvas edges are often desk).
 
 ## Definition of done
 See `PROJECT_PLAN.md` §14. In short: phone/tablet/desktop checked, keyboard and screen-reader friendly, offline, tested (unit + a component or e2e test for the flow), budgets met, undo for reversible actions, designed empty/loading/error states, docs updated.

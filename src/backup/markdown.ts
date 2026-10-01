@@ -38,6 +38,18 @@ export async function exportNote(itemId: Id): Promise<ExportedNote> {
     text = text.split(`${ATTACHMENT_SCHEME}${a.id}`).join(encodeURI(path));
     files[path] = await blobBytes(a.blob);
   }
+  // Sketch blocks (NOTE-8) travel as SVG pictures, so other apps can show them.
+  const sketches = [...new Set([...text.matchAll(/ndoco:ink\/([0-9a-f-]+)/g)].map((m) => m[1]!))];
+  if (sketches.length) {
+    const ex = await import('@/canvas/export');
+    for (const id of sketches) {
+      const doc = await ex.loadExportDoc(itemId, id).catch(() => null);
+      if (!doc) continue;
+      const path = `assets/sketch-${id.slice(-8)}.svg`;
+      text = text.split(`ndoco:ink/${id}`).join(path);
+      files[path] = strToU8(await ex.toSvg(doc));
+    }
+  }
   const front = [
     '---',
     `title: ${yamlString(item.title)}`,
@@ -48,7 +60,7 @@ export async function exportNote(itemId: Id): Promise<ExportedNote> {
     '',
   ].join('\n');
   const md = front + text;
-  if (!attachments.length) return { name: `${base}.md`, blob: new Blob([md], { type: 'text/markdown' }) };
+  if (!Object.keys(files).length) return { name: `${base}.md`, blob: new Blob([md], { type: 'text/markdown' }) };
   files[`${base}.md`] = strToU8(md);
   return { name: `${base}.zip`, blob: new Blob([zipSync(files) as BlobPart], { type: 'application/zip' }) };
 }

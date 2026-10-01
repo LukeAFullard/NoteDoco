@@ -50,7 +50,7 @@ export default defineConfig({
         shortcuts: [
           { name: 'New note', short_name: 'Note', url: '#/new/note' },
           { name: 'New sticky', short_name: 'Sticky', url: '#/new/sticky' },
-          { name: 'Ink lab', short_name: 'Ink', url: '#/lab/ink' },
+          { name: 'New ink note', short_name: 'Ink', url: '#/new/ink' },
         ],
       },
     }),

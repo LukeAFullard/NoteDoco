@@ -13,7 +13,7 @@ it('keeps the shipped schema stable', () => {
   const schema = Object.fromEntries(
     db.tables.map((t) => [t.name, [t.schema.primKey.src, ...t.schema.indexes.map((i) => i.src)].join(', ')]),
   );
-  expect(db.verno).toBe(2);
+  expect(db.verno).toBe(3);
   expect(schema).toMatchInlineSnapshot(`
     {
       "attachments": "id, itemId, sha256",
@@ -22,6 +22,7 @@ it('keeps the shipped schema stable', () => {
       "boards": "itemId",
       "groups": "id, parentId, order, deletedAt",
       "inkDocs": "id, itemId",
+      "inkElements": "id, pageId",
       "inkPages": "id, docId, [docId+order]",
       "items": "id, kind, groupId, [groupId+order], *tags, when.start, due.start, createdAt, updatedAt, deletedAt, recurrence",
       "layouts": "id, kind",
@@ -78,5 +79,27 @@ it('upgrades version 1: indexes checklist lines and repeating items', async () =
   ]);
   expect(await v2.items.where('recurrence').above('').primaryKeys()).toEqual(['n1']);
   v2.close();
+  await Dexie.delete(name);
+});
+
+it('upgrades version 2: adds ink elements and keeps existing ink', async () => {
+  const name = 'upgrade-test-3';
+  await Dexie.delete(name);
+  const v2 = new Dexie(name);
+  v2.version(1).stores(V1_STORES);
+  v2.version(2).stores({ items: 'id, kind, groupId, [groupId+order], *tags, when.start, due.start, createdAt, updatedAt, deletedAt, recurrence' });
+  await v2.open();
+  await v2.table('inkDocs').add({ id: 'd1', itemId: 'i1', layout: 'pages', paper: { size: 'a4', template: 'blank', colour: 'white' } });
+  await v2.table('inkPages').add({ id: 'p1', docId: 'd1', order: 'a0', paper: { size: 'a4', template: 'blank', colour: 'white' }, background: null });
+  await v2.table('strokes').add({ id: 's1', pageId: 'p1', tool: 'ballpoint', colour: 'black', size: 1, opacity: 1, points: new Uint8Array([0]), bbox: [0, 0, 1, 1], createdAt: '' });
+  v2.close();
+
+  const v3 = new NoteDocoDB(name);
+  await v3.open();
+  expect(v3.verno).toBe(3);
+  expect(await v3.strokes.count()).toBe(1);
+  await v3.inkElements.add({ id: 'e1', pageId: 'p1', kind: 'text', x: 0, y: 0, w: 100, h: 20, text: 'hi', fontSize: 18, colour: 'black', attachmentId: null, createdAt: '' });
+  expect(await v3.inkElements.where('pageId').equals('p1').count()).toBe(1);
+  v3.close();
   await Dexie.delete(name);
 });

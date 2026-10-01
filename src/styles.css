@@ -30,6 +30,9 @@
   --nd-success: #295148;
   --nd-danger: #9c4a31;
   --nd-focus: #7a5c26;
+  /* Ink pages: the desk around the paper, and the paper's edge. */
+  --nd-desk: #d9ddd6;
+  --page-shadow: rgb(16 22 28 / 0.22);
 
   --sticky-ink: #1c1f22;
   --sticky-font: var(--font-sans);
@@ -57,6 +60,8 @@
   --nd-success: #6fb3a3;
   --nd-danger: #e08a6f;
   --nd-focus: #d9a54a;
+  --nd-desk: #0b1014;
+  --page-shadow: rgb(0 0 0 / 0.6);
 
   --sticky-lemon: #e6cf6e;
   --sticky-apricot: #e6ae70;
@@ -85,6 +90,7 @@
   --color-success: var(--nd-success);
   --color-danger: var(--nd-danger);
   --color-focus: var(--nd-focus);
+  --color-desk: var(--nd-desk);
 
   --color-sticky-ink: var(--sticky-ink);
   --color-sticky-lemon: var(--sticky-lemon);
@@ -252,6 +258,35 @@
   }
   .note-content img.ProseMirror-selectednode {
     outline: 2px solid var(--color-focus);
+  }
+  /* Sketch blocks (NOTE-8): a live preview on its paper; press to draw. */
+  .note-content .note-sketch {
+    margin: 0.75em 0;
+  }
+  .note-content .note-sketch-button {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-panel);
+    overflow: hidden;
+    cursor: pointer;
+    background: var(--color-surface);
+  }
+  .note-content .note-sketch-button:focus-visible,
+  .note-content .note-sketch.ProseMirror-selectednode .note-sketch-button {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+  .note-content .note-sketch canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+  .note-content .note-sketch-hint {
+    margin-top: 0.25em;
+    font-size: 0.8em;
+    color: var(--color-muted);
   }
   .note-content table {
     border-collapse: collapse;

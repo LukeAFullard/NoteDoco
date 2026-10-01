@@ -16,6 +16,7 @@ import { useLocalPref } from '@/lib/localPref';
 import { KIND_LABELS, itemTitle } from './kinds';
 
 const NoteEditor = lazy(() => import('@/features/notes/NoteEditor').then((m) => ({ default: m.NoteEditor })));
+const InkEditor = lazy(() => import('@/features/ink/InkEditor').then((m) => ({ default: m.InkEditor })));
 
 /** Wide enough for the inspector beside the item (it opens as a sheet otherwise). */
 function useWide() {
@@ -30,7 +31,7 @@ function useWide() {
   return wide;
 }
 
-/** Opens any item by id: notes in the editor, stickies in their dialog. */
+/** Opens any item by id: notes and ink notes in their editors, stickies in their dialog. */
 export function ItemPage() {
   const { itemId = '' } = useParams();
   const item = useLiveQuery(() => db.items.get(itemId), [itemId]);
@@ -82,6 +83,8 @@ export function ItemPage() {
         <div className="min-h-0 min-w-0 flex-1">
           {item.kind === 'note' ? (
             <NoteEditor item={item} />
+          ) : item.kind === 'ink' ? (
+            <InkEditor key={item.id} item={item} />
           ) : item.kind === 'sticky' ? (
             <div className="flex flex-col items-center gap-4 p-10">
               <button type="button" onClick={() => openSticky(item.id)} aria-label="Edit sticky">

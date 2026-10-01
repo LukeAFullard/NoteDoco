@@ -10,6 +10,7 @@ import { openPalette, useUi } from './ui';
 import { LazyNewMenu as NewMenu } from '@/features/capture/LazyNewMenu';
 import { useCreate } from '@/features/capture/useCreate';
 import { useStickyDialog } from '@/features/stickies/stickyDialog';
+import { useSketchDialog } from '@/features/ink/sketchDialog';
 import { useGlobalShortcuts } from './shortcuts';
 import { useMissed } from '@/features/reminders/store';
 import { maxExtraPanes, setActivePane, usePanes } from '@/features/panes/store';
@@ -54,6 +55,7 @@ const StickyDialog = lazy(() => import('@/features/stickies/StickyDialog').then(
 const DateDialog = lazy(() => import('@/features/time/DateDialog').then((m) => ({ default: m.DateDialog })));
 const ExtraPane = lazy(() => import('@/features/panes/ExtraPane').then((m) => ({ default: m.ExtraPane })));
 const MissedDialog = lazy(() => import('@/features/reminders/MissedDialog').then((m) => ({ default: m.MissedDialog })));
+const SketchDialog = lazy(() => import('@/features/ink/SketchDialog').then((m) => ({ default: m.SketchDialog })));
 const StickyDock = lazy(() => import('@/features/stickies/StickyDock').then((m) => ({ default: m.StickyDock })));
 
 function BottomTab({ to, onPress, icon, label }: { to?: string; onPress?: () => void; icon: ReactNode; label: string }) {
@@ -77,7 +79,7 @@ function BottomTab({ to, onPress, icon, label }: { to?: string; onPress?: () => 
 export function Shell() {
   const create = useCreate();
   const actions = useMemo(
-    () => ({ newNote: () => void create.note(), newSticky: () => void create.sticky(), showShortcuts: () => useUi.setState({ shortcutsOpen: true }) }),
+    () => ({ newNote: () => void create.note(), newSticky: () => void create.sticky(), newInk: () => void create.ink(), showShortcuts: () => useUi.setState({ shortcutsOpen: true }) }),
     [create],
   );
   useGlobalShortcuts(actions);
@@ -91,6 +93,7 @@ export function Shell() {
   const panes = focusMode ? [] : allPanes.slice(0, maxExtraPanes(width));
   const shortcutsOpen = useUi((s) => s.shortcutsOpen);
   const stickyOpen = useStickyDialog((s) => s.id !== null);
+  const sketchOpen = useSketchDialog((s) => s.docId !== null);
   const paletteOpen = useUi((s) => s.paletteOpen);
   const newGroupOpen = useUi((s) => s.newGroupOpen);
   const dateDialogOpen = useUi((s) => s.dateDialogIds !== null);
@@ -158,6 +161,7 @@ export function Shell() {
         {shortcutsOpen && <ShortcutsDialog />}
         {!focusMode && <StickyDock />}
         {stickyOpen && <StickyDialog />}
+        {sketchOpen && <SketchDialog />}
         {dateDialogOpen && <DateDialog />}
         {missedCount > 0 && <MissedDialog />}
       </Suspense>

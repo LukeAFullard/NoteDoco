@@ -72,4 +72,20 @@ describe('InputRouter', () => {
     expect(r.down(ev({ pointerType: 'mouse', button: 0 })).role).toMatchObject({ kind: 'draw' });
     expect(r.down(ev({ pointerType: 'mouse', button: 1, buttons: 4 })).role).toEqual({ kind: 'navigate' });
   });
+
+  it('turns a one-finger stroke into a pinch when a second finger lands', () => {
+    const r = new InputRouter();
+    expect(r.down(ev({ pointerId: 1, timeStamp: 0 })).role).toEqual({ kind: 'draw', tool: 'primary' });
+    expect(r.down(ev({ pointerId: 2, timeStamp: 30 }))).toEqual({ role: { kind: 'navigate' }, retract: [1] });
+    expect(r.stats.retracted).toBe(1);
+  });
+
+  it('can let fingers keep drawing after a pen, or never draw', () => {
+    const always = new InputRouter({ fingerDraws: true, fingerAlways: true, palmSize: 44, penGraceMs: 300, retractWindowMs: 120 });
+    always.down(ev({ pointerId: 9, pointerType: 'pen', timeStamp: 0 }));
+    always.up(ev({ pointerId: 9, pointerType: 'pen', timeStamp: 10 }));
+    expect(always.down(ev({ pointerId: 1, timeStamp: 1000 })).role).toEqual({ kind: 'draw', tool: 'primary' });
+    const never = new InputRouter({ fingerDraws: false, palmSize: 44, penGraceMs: 300, retractWindowMs: 120 });
+    expect(never.down(ev({ pointerId: 1 })).role).toEqual({ kind: 'navigate' });
+  });
 });
