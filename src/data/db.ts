@@ -6,6 +6,7 @@ import type {
   BoardNode,
   Group,
   InkDoc,
+  InkElement,
   InkPage,
   Item,
   Layout,
@@ -39,6 +40,7 @@ export class NoteDocoDB extends Dexie {
   inkDocs!: Table<InkDoc, string>;
   inkPages!: Table<InkPage, string>;
   strokes!: Table<Stroke, string>;
+  inkElements!: Table<InkElement, string>;
   boards!: Table<Board, string>;
   boardNodes!: Table<BoardNode, string>;
   boardEdges!: Table<BoardEdge, string>;
@@ -79,6 +81,13 @@ export class NoteDocoDB extends Dexie {
         const refs = bodies.flatMap((b) => taskRefsFor(b.itemId, b.text));
         await tx.table<TaskRef>('taskRefs').clear();
         if (refs.length) await tx.table<TaskRef>('taskRefs').bulkAdd(refs);
+      });
+    // Version 3 (Phase 3, ink): text boxes and images on ink pages. A new, empty table, so
+    // there's nothing to convert; the upgrade only checks existing ink is untouched.
+    this.version(3)
+      .stores({ inkElements: 'id, pageId' })
+      .upgrade(async () => {
+        /* nothing to move: elements are new */
       });
   }
 }

@@ -1,13 +1,15 @@
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Maximize, Minus, Plus } from 'lucide-react';
 import { InkEngine, type EngineState, type EraserMode, type InkTool } from '@/canvas/engine';
 import { fromStored, toStored, type StrokeChange } from '@/canvas/model';
 import { HIGHLIGHTER_COLOUR_KEYS } from '@/canvas/inkColours';
+import { addAttachment } from '@/data/repos/attachments';
+import { newId, nowIso } from '@/lib/ids';
 import { db } from '@/data/db';
 import { addPage, listPages, loadInk, saveStrokes } from '@/data/repos/ink';
 import { updateItem } from '@/data/repos/items';
-import type { Item } from '@/data/types';
+import type { InkElement, Item } from '@/data/types';
 import { IconButton } from '@/design/Button';
 import { EmptyState } from '@/design/EmptyState';
 import { showToast } from '@/design/toast';
@@ -19,6 +21,7 @@ import { SelectionBar } from './SelectionBar';
 import { PageSorter } from './PageSorter';
 import { PaperDialog } from './PaperDialog';
 import { TOOLS } from './tools';
+import { ElementsLayer, type DraftText } from './ElementsLayer';
 import { addFavourite, DEFAULT_FAVOURITES, removeFavourite, type Favourite } from './favourites';
 
 interface PenPrefs {
@@ -37,6 +40,21 @@ const prefs = (): PenPrefs => ({ ...DEFAULT_PREFS, ...readPref<Partial<PenPrefs>
 const remember = (patch: Partial<PenPrefs>) => writePref(PREF_KEY, { ...prefs(), ...patch });
 
 const PAN_STEP = 64;
+/** New text boxes: width and type size in page pixels. */
+const TEXT_WIDTH = 320;
+const TEXT_SIZE = 18;
+
+/** An image's natural size, for placing it (falls back to 4:3 if it can't be read). */
+async function imageSize(file: Blob): Promise<{ w: number; h: number }> {
+  try {
+    const bmp = await createImageBitmap(file);
+    const size = { w: bmp.width, h: bmp.height };
+    bmp.close();
+    return size;
+  } catch {
+    return { w: 400, h: 300 };
+  }
+}
 const isHighlighterColour = (c: string) => (HIGHLIGHTER_COLOUR_KEYS as readonly string[]).includes(c);
 
 /**
@@ -48,7 +66,7 @@ function useStrokeSaver(itemId: string) {
   return useCallback(
     (c: StrokeChange) => {
       queue.current = queue.current
-        .then(() => saveStrokes(itemId, c.added.map(toStored), c.removed.map((s) => s.id)))
+        .then(() => saveStrokes(itemId, c.added.map(toStored), c.removed.map((s) => s.id), c.addedEls, c.removedEls?.map((e) => e.id)))
         .catch((err: unknown) => {
           console.error(err);
           showToast({ message: 'Your latest ink couldn’t be saved. Check that storage isn’t full, then keep writing.', tone: 'danger' }, 0);
@@ -84,6 +102,9 @@ export function InkEditor({ item }: { item: Item }) {
   const [state, setState] = useState<EngineState | null>(null);
   const [announcement, setAnnouncement] = useState('');
   const [dialog, setDialog] = useState<'pages' | 'paper' | null>(null);
+  const [editing, setEditingState] = useState<DraftText | null>(null);
+  const editingAt = useRef(0);
+  const fileInput = useRef<HTMLInputElement>(null);
   const [favourites, setFavourites] = useLocalPref<Favourite[]>('ink.favourites', DEFAULT_FAVOURITES);
   const known = useRef(new Set<string>());
   const scrollTo = useRef<string | null>(null);
@@ -91,6 +112,40 @@ export function InkEditor({ item }: { item: Item }) {
   const save = useStrokeSaver(item.id);
   const itemId = item.id;
   const say = (msg: string) => setAnnouncement(msg);
+  // Tapping away from a text box being edited only finishes it; it doesn't start another.
+  const setEditing = useCallback((d: DraftText | null) => {
+    editingAt.current = d ? 0 : performance.now();
+    setEditingState(d);
+  }, []);
+  const engineRef = useRef<InkEngine | null>(null);
+  useLayoutEffect(() => {
+    engineRef.current = engine;
+  });
+  const placeText = useCallback(
+    (pageId: string, x: number, y: number) => {
+      if (performance.now() - editingAt.current < 300) return;
+      const e = engineRef.current;
+      const page = e?.pageBoxes.find((b) => b.id === pageId);
+      if (!e || !page) return;
+      const colour = isHighlighterColour(e.colour) ? 'black' : e.colour;
+      const el: InkElement = {
+        id: newId(),
+        pageId,
+        kind: 'text',
+        x,
+        y: Math.max(0, y - TEXT_SIZE * 0.7),
+        w: Math.min(TEXT_WIDTH, page.w - x),
+        h: TEXT_SIZE * 1.35,
+        text: '',
+        fontSize: TEXT_SIZE,
+        colour,
+        attachmentId: null,
+        createdAt: nowIso(),
+      };
+      setEditing({ el, isNew: true });
+    },
+    [setEditing],
+  );
 
   const appendPage = useCallback(
     async (automatic: boolean) => {
@@ -112,16 +167,19 @@ export function InkEditor({ item }: { item: Item }) {
     let live = true;
     let created: InkEngine | null = null;
     loadInk(itemId)
-      .then(({ doc, pages, strokes }) => {
+      .then(({ doc, pages, strokes, elements }) => {
         const host = hostRef.current;
         if (!live || !host) return;
         const p = prefs();
         created = new InkEngine(host, {
           pages,
           strokes: strokes.map(fromStored),
+          elements,
           onState: setState,
+          onPlaceText: placeText,
           onChange: save,
           onNearEnd: () => void appendPage(true),
+          onSnap: (kind) => setAnnouncement(`Snapped to ${kind === 'arrow' || kind === 'ellipse' ? 'an' : 'a'} ${kind}. Undo to keep it as drawn.`),
         });
         created.tool = p.tool;
         created.colour = p.tool === 'highlighter' ? p.highlighter : p.pen;
@@ -139,7 +197,7 @@ export function InkEditor({ item }: { item: Item }) {
       created?.destroy();
       setEngine(null);
     };
-  }, [itemId, save, appendPage]);
+  }, [itemId, save, appendPage, placeText]);
 
   // Pages come from storage, so undo from a toast, the page sorter and other panes all show up.
   const pages = useLiveQuery(() => (docId ? listPages(docId) : undefined), [docId]);
@@ -147,10 +205,13 @@ export function InkEditor({ item }: { item: Item }) {
     if (!engine || !pages) return;
     let live = true;
     const fresh = pages.filter((p) => !known.current.has(p.id)).map((p) => p.id);
-    void (fresh.length ? db.strokes.where('pageId').anyOf(fresh).toArray() : Promise.resolve([])).then((strokes) => {
+    const load = fresh.length
+      ? Promise.all([db.strokes.where('pageId').anyOf(fresh).toArray(), db.inkElements.where('pageId').anyOf(fresh).toArray()])
+      : Promise.resolve([[], []] as const);
+    void load.then(([strokes, elements]) => {
       if (!live) return;
       known.current = new Set(pages.map((p) => p.id));
-      engine.setPages(pages, strokes.map(fromStored));
+      engine.setPages(pages, strokes.map(fromStored), [...elements]);
       const target = scrollTo.current;
       const i = target ? pages.findIndex((p) => p.id === target) : -1;
       if (i >= 0) {
@@ -163,6 +224,52 @@ export function InkEditor({ item }: { item: Item }) {
     };
   }, [engine, pages]);
 
+  /** Adds pictures to the page: where they were dropped, or in the middle of the view. */
+  const insertImages = async (files: File[], at?: { clientX: number; clientY: number }) => {
+    if (!engine) return;
+    const images = files.filter((f) => f.type.startsWith('image/'));
+    let offset = 0;
+    for (const file of images) {
+      const spot = at ? engine.pagePointAt(at.clientX, at.clientY) : engine.viewCentre();
+      if (!spot) return;
+      const natural = await imageSize(file);
+      const w = Math.min(natural.w, spot.page.w * 0.6);
+      const h = (natural.h * w) / natural.w;
+      const att = await addAttachment(itemId, file);
+      engine.addElement({
+        id: newId(),
+        pageId: spot.page.id,
+        kind: 'image',
+        x: Math.max(0, Math.min(spot.page.w - w, spot.x - (at ? 0 : w / 2) + offset)),
+        y: Math.max(0, spot.y - (at ? 0 : h / 2) + offset),
+        w,
+        h,
+        text: '',
+        fontSize: TEXT_SIZE,
+        colour: 'black',
+        attachmentId: att.id,
+        createdAt: nowIso(),
+      });
+      offset += 24;
+    }
+    if (images.length) say(images.length === 1 ? 'Image added.' : `${images.length} images added.`);
+  };
+
+  const onPaste = (e: ClipboardEvent<HTMLDivElement>) => {
+    if (isTypingTarget(e.target)) return;
+    const files = [...(e.clipboardData?.files ?? [])];
+    if (!files.some((f) => f.type.startsWith('image/'))) return;
+    e.preventDefault();
+    void insertImages(files);
+  };
+
+  const onDrop = (e: DragEvent<HTMLDivElement>) => {
+    const files = [...(e.dataTransfer?.files ?? [])];
+    if (!files.length) return;
+    e.preventDefault();
+    void insertImages(files, { clientX: e.clientX, clientY: e.clientY });
+  };
+
   const setTool = (tool: InkTool) => {
     if (!engine) return;
     const p = prefs();
@@ -170,6 +277,7 @@ export function InkEditor({ item }: { item: Item }) {
     const wasHighlighter = isHighlighterColour(engine.colour);
     if (tool === 'highlighter' && !wasHighlighter) engine.setColour(p.highlighter);
     if (tool !== 'highlighter' && tool !== 'eraser' && tool !== 'lasso' && wasHighlighter) engine.setColour(p.pen);
+    if (tool !== 'text' && editing) setEditing(null);
     engine.setTool(tool);
     remember({ tool });
   };
@@ -209,7 +317,8 @@ export function InkEditor({ item }: { item: Item }) {
     if (mod && k === 'z') return void (handled(), e.shiftKey ? redo() : undo());
     if (mod && k === 'y') return void (handled(), redo());
     if (mod && k === 'a') return void (handled(), engine.selectAll(), say('Everything on this page is selected.'));
-    if (mod && k === 'v') return void (handled(), engine.paste() && say('Pasted.'));
+    // Copied ink pastes here; anything else (an image) goes on to the paste event.
+    if (mod && k === 'v' && engine.state.canPaste) return void (handled(), engine.paste() && say('Pasted.'));
     if (sel && mod && k === 'c') return void (handled(), engine.copySelection(), say('Copied.'));
     if (sel && mod && k === 'x') return void (handled(), engine.cutSelection(), say('Cut.'));
     if (sel && mod && k === 'd') return void (handled(), engine.duplicateSelection(), say('Duplicated.'));
@@ -238,7 +347,7 @@ export function InkEditor({ item }: { item: Item }) {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col" onKeyDown={onKeyDown}>
+    <div className="flex h-full min-h-0 flex-col" onKeyDown={onKeyDown} onPaste={onPaste} onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
       <TitleField item={item} />
       {engine && state && (
         <InkToolbar
@@ -253,7 +362,7 @@ export function InkEditor({ item }: { item: Item }) {
           }}
           onFavourite={pickFavourite}
           onAddFavourite={() => {
-            if (state.tool === 'eraser' || state.tool === 'lasso') return;
+            if (state.tool === 'eraser' || state.tool === 'lasso' || state.tool === 'text') return;
             setFavourites(addFavourite(favourites, { tool: state.tool, colour: state.colour, size: state.size }));
             say('Added to favourites.');
           }}
@@ -265,6 +374,7 @@ export function InkEditor({ item }: { item: Item }) {
           onPaper={() => setDialog('paper')}
           onPaste={() => engine.paste() && say('Pasted.')}
           onSelectAll={() => engine.selectAll()}
+          onInsertImage={() => fileInput.current?.click()}
         />
       )}
       <div className="relative min-h-0 flex-1">
@@ -313,6 +423,29 @@ export function InkEditor({ item }: { item: Item }) {
             </IconButton>
           </div>
         )}
+        {engine && state && (
+          <ElementsLayer
+            engine={engine}
+            tool={state.tool}
+            zoom={state.zoom}
+            version={`${state.elements}-${state.layout}`}
+            editing={editing}
+            setEditing={setEditing}
+            onSay={say}
+          />
+        )}
+        <input
+          ref={fileInput}
+          type="file"
+          accept="image/*"
+          multiple
+          hidden
+          onChange={(e) => {
+            const files = [...(e.target.files ?? [])]; // copy before resetting: the FileList is live
+            e.target.value = '';
+            void insertImages(files);
+          }}
+        />
         <span className="sr-only" role="status">
           {announcement}
         </span>

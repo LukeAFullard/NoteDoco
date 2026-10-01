@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Brush, Eraser, Highlighter, Lasso, Pen, PenTool } from 'lucide-react';
+import { Brush, Eraser, Highlighter, Lasso, Pen, PenTool, Type } from 'lucide-react';
 import type { InkTool } from '@/canvas/engine';
 
 /** The tools, in toolbar order, with their keyboard shortcuts. */
@@ -10,6 +10,7 @@ export const TOOLS: Array<{ tool: InkTool; label: string; icon: ReactNode; key: 
   { tool: 'highlighter', label: 'Highlighter', icon: <Highlighter size={18} />, key: 'H' },
   { tool: 'eraser', label: 'Eraser', icon: <Eraser size={18} />, key: 'E' },
   { tool: 'lasso', label: 'Lasso: select ink', icon: <Lasso size={18} />, key: 'L' },
+  { tool: 'text', label: 'Text box', icon: <Type size={18} />, key: 'T' },
 ];
 
 export const SIZES = [

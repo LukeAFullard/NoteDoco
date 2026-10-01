@@ -1,4 +1,4 @@
-import { ClipboardPaste, Ellipsis, FilePlus2, Files, NotebookText, Redo2, SquareDashedMousePointer, Star, Undo2 } from 'lucide-react';
+import { ClipboardPaste, Ellipsis, FilePlus2, Files, ImagePlus, NotebookText, Redo2, SquareDashedMousePointer, Star, Undo2 } from 'lucide-react';
 import { Radio, RadioGroup } from 'react-aria-components';
 import { IconButton } from '@/design/Button';
 import { Menu, MenuItem } from '@/design/Menu';
@@ -25,9 +25,10 @@ export interface ToolbarProps {
   onPaper: () => void;
   onPaste: () => void;
   onSelectAll: () => void;
+  onInsertImage: () => void;
 }
 
-const isPen = (t: InkTool): t is PenTool => t !== 'eraser' && t !== 'lasso';
+const isPen = (t: InkTool): t is PenTool => t !== 'eraser' && t !== 'lasso' && t !== 'text';
 
 /** The pen toolbar (INK-1–7). Every control has a name and works by keyboard. */
 export function InkToolbar(p: ToolbarProps) {
@@ -47,7 +48,9 @@ export function InkToolbar(p: ToolbarProps) {
       <span className="flex items-center gap-0.5">
         {state.tool === 'eraser' ? (
           <EraserOptions mode={state.eraser} highlighterOnly={state.eraseHighlighterOnly} onChange={p.onEraser} />
-        ) : state.tool === 'lasso' ? null : (
+        ) : state.tool === 'lasso' ? null : state.tool === 'text' ? (
+          <ColourPicker value={state.colour} onChange={p.onColour} kind="pen" />
+        ) : (
           <>
             <ColourPicker value={state.colour} onChange={p.onColour} kind={state.tool === 'highlighter' ? 'highlighter' : 'pen'} isDisabled={!pen} />
             <ThicknessPicker value={state.size} onChange={p.onSize} isDisabled={!pen} />
@@ -120,6 +123,9 @@ export function InkToolbar(p: ToolbarProps) {
           </MenuItem>
           <MenuItem textValue="Paper" onAction={p.onPaper}>
             <NotebookText size={15} aria-hidden /> Paper…
+          </MenuItem>
+          <MenuItem textValue="Insert image" onAction={p.onInsertImage}>
+            <ImagePlus size={15} aria-hidden /> Insert image…
           </MenuItem>
           <MenuItem textValue="Select all on this page" onAction={p.onSelectAll}>
             <SquareDashedMousePointer size={15} aria-hidden /> Select all on this page

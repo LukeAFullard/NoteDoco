@@ -1,7 +1,7 @@
 import RBush from 'rbush';
 import { boundsOf, decodePoints, distanceToPolyline, encodePoints, type InkPoint } from './points';
 import { PEN_STYLES, type PenTool } from './strokeStyle';
-import type { Stroke } from '@/data/types';
+import type { InkElement, Stroke } from '@/data/types';
 import type { Rect } from './camera';
 import { applyMatrix, matrixScale, pointInPolygon, rectOfPoints, resample, type Matrix } from './geometry';
 
@@ -26,11 +26,15 @@ export interface InkStroke {
   createdAt: string;
 }
 
-/** Strokes that appeared and disappeared in one user action. */
+/** Strokes (and text boxes or images) that appeared and disappeared in one user action. */
 export interface StrokeChange {
   added: InkStroke[];
   removed: InkStroke[];
+  addedEls?: InkElement[];
+  removedEls?: InkElement[];
 }
+
+const isEmpty = (c: StrokeChange) => !c.added.length && !c.removed.length && !c.addedEls?.length && !c.removedEls?.length;
 
 interface Box extends Rect {
   stroke: InkStroke;
@@ -119,17 +123,27 @@ export function boundsOfStrokes(strokes: readonly InkStroke[]): Rect | null {
   };
 }
 
-const invert = (c: StrokeChange): StrokeChange => ({ added: c.removed, removed: c.added });
+const invert = (c: StrokeChange): StrokeChange => ({ added: c.removed, removed: c.added, addedEls: c.removedEls, removedEls: c.addedEls });
 const byId = (a: InkStroke, b: InkStroke) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 
 export class InkModel {
   private pages = new Map<string, { list: InkStroke[]; tree: RBush<Box> }>();
   private boxes = new Map<string, Box>();
+  private els = new Map<string, InkElement>();
   private undoStack: StrokeChange[] = [];
   private redoStack: StrokeChange[] = [];
 
-  constructor(strokes: InkStroke[] = []) {
-    this.apply({ added: strokes, removed: [] });
+  constructor(strokes: InkStroke[] = [], elements: InkElement[] = []) {
+    this.apply({ added: strokes, removed: [], addedEls: elements });
+  }
+
+  /** Text boxes and images on a page, oldest first. */
+  elements(pageId: string): InkElement[] {
+    return [...this.els.values()].filter((e) => e.pageId === pageId).sort((a, b) => (a.id < b.id ? -1 : 1));
+  }
+
+  element(id: string) {
+    return this.els.get(id);
   }
 
   get count() {
@@ -186,12 +200,14 @@ export class InkModel {
   /** Applies a change without recording it (loading, or an undo/redo step). */
   apply(change: StrokeChange) {
     for (const s of change.removed) this.removeOne(s.id);
+    for (const e of change.removedEls ?? []) this.els.delete(e.id);
     for (const s of change.added) this.addOne(s);
+    for (const e of change.addedEls ?? []) this.els.set(e.id, e);
   }
 
   /** Applies a user action and records it for undo. Empty changes are ignored. */
   commit(change: StrokeChange): StrokeChange | null {
-    if (!change.added.length && !change.removed.length) return null;
+    if (isEmpty(change)) return null;
     this.apply(change);
     this.undoStack.push(change);
     this.redoStack = [];
@@ -200,7 +216,7 @@ export class InkModel {
 
   /** Records a change that was already applied (strokes erased live while dragging). */
   record(change: StrokeChange) {
-    if (!change.added.length && !change.removed.length) return;
+    if (isEmpty(change)) return;
     this.undoStack.push(change);
     this.redoStack = [];
   }
@@ -237,10 +253,12 @@ export class InkModel {
     const list = [...this.strokes(pageId)];
     for (const s of list) this.removeOne(s.id);
     this.pages.delete(pageId);
+    for (const e of this.elements(pageId)) this.els.delete(e.id);
+    const keep = <T extends { pageId: string }>(list: T[] | undefined) => (list ?? []).filter((x) => x.pageId !== pageId);
     const prune = (stack: StrokeChange[]) =>
       stack
-        .map((c) => ({ added: c.added.filter((s) => s.pageId !== pageId), removed: c.removed.filter((s) => s.pageId !== pageId) }))
-        .filter((c) => c.added.length || c.removed.length);
+        .map((c) => ({ added: keep(c.added), removed: keep(c.removed), addedEls: keep(c.addedEls), removedEls: keep(c.removedEls) }))
+        .filter((c) => !isEmpty(c));
     this.undoStack = prune(this.undoStack);
     this.redoStack = prune(this.redoStack);
     return list;

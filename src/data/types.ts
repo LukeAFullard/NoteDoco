@@ -127,6 +127,24 @@ export interface Stroke {
   createdAt: Instant;
 }
 
+/** A typed text box or an image on an ink page (INK-14). Position and size in page pixels. */
+export interface InkElement {
+  id: Id;
+  pageId: Id;
+  kind: 'text' | 'image';
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** Text boxes: the text, its size (page px) and colour (an ink palette key or "#rrggbb"). */
+  text: string;
+  fontSize: number;
+  colour: string;
+  /** Images: the attachment holding the picture. */
+  attachmentId: Id | null;
+  createdAt: Instant;
+}
+
 export interface Board {
   itemId: Id;
   background: 'plain' | 'dots' | 'grid' | 'cork';

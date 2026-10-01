@@ -1,7 +1,7 @@
 import type { CDPSession, Page } from '@playwright/test';
 
 /** Sends real pen input through the DevTools protocol (Chromium only), with pressure and tilt. */
-export async function penStroke(cdp: CDPSession, points: Array<[number, number]>, pressure = 0.6) {
+export async function penStroke(cdp: CDPSession, points: Array<[number, number]>, pressure = 0.6, holdMs = 0) {
   const send = (type: string, x: number, y: number, force: number, buttons = 1) =>
     cdp.send('Input.dispatchMouseEvent', {
       type,
@@ -19,6 +19,10 @@ export async function penStroke(cdp: CDPSession, points: Array<[number, number]>
   await send('mousePressed', first![0], first![1], pressure);
   for (const [x, y] of rest) await send('mouseMoved', x, y, pressure);
   const last = points.at(-1)!;
+  if (holdMs) {
+    await new Promise((r) => setTimeout(r, holdMs));
+    await send('mouseMoved', last[0], last[1], pressure);
+  }
   await send('mouseReleased', last[0], last[1], 0, 0);
 }
 

@@ -7,7 +7,8 @@ import { resolveInk } from './inkColours';
 import { boundsOfStrokes, InkModel, makeStroke, splitStroke, transformStroke, type InkStroke, type StrokeChange } from './model';
 import { along, applyMatrix, IDENTITY, rotateAbout, scaleAbout, translate, type Matrix } from './geometry';
 import { fillStroke, paintInk, pathOf } from './render';
-import type { Paper } from '@/data/types';
+import { recognise, shapeToInk, type ShapeKind } from './shapes';
+import type { InkElement, Paper } from '@/data/types';
 import { newId, nowIso } from '@/lib/ids';
 
 /**
@@ -22,7 +23,7 @@ import { newId, nowIso } from '@/lib/ids';
  * coordinates; pages stack vertically.
  */
 
-export type InkTool = PenTool | 'eraser' | 'lasso';
+export type InkTool = PenTool | 'eraser' | 'lasso' | 'text';
 export type EraserMode = 'stroke' | 'precise';
 
 export interface EngineSettings extends RouterSettings {
@@ -59,6 +60,8 @@ export interface EngineState {
   pageCount: number;
   /** Changes whenever pages are added, moved or re-papered (for page thumbnails). */
   layout: number;
+  /** Changes whenever a text box or image changes. */
+  elements: number;
   /** Lasso selection (INK-6). */
   selection: { count: number; colour: string | null; size: number | null } | null;
   canPaste: boolean;
@@ -67,18 +70,37 @@ export interface EngineState {
 export interface EngineOptions {
   pages: Array<{ id: string; paper: Paper }>;
   strokes: InkStroke[];
+  elements?: InkElement[];
   settings?: EngineSettings;
   onState?: (s: EngineState) => void;
   /** A user action changed strokes: save it. Also called for undo and redo. */
   onChange?: (c: StrokeChange) => void;
   /** Someone wrote near the bottom of the last page (to add a page automatically). */
   onNearEnd?: () => void;
+  /** A stroke was snapped to a clean shape (to tell screen-reader users). */
+  onSnap?: (kind: ShapeKind) => void;
+  /** The text tool tapped a page: start a text box there (page coordinates). */
+  onPlaceText?: (pageId: string, x: number, y: number) => void;
 }
 
 type Pt = { x: number; y: number };
 
 type Active =
-  | { kind: 'ink'; tool: PenTool; colour: string; size: number; page: PageBox; points: InkPoint[]; predicted: InkPoint[]; pressure: boolean; start: number }
+  | {
+      kind: 'ink';
+      tool: PenTool;
+      colour: string;
+      size: number;
+      page: PageBox;
+      points: InkPoint[];
+      predicted: InkPoint[];
+      pressure: boolean;
+      start: number;
+      /** Hold-to-snap (INK-11): where the pen last moved, and the shape once it's snapped. */
+      anchor: Pt;
+      hold: number;
+      shape: { kind: ShapeKind; points: InkPoint[] } | null;
+    }
   | { kind: 'erase'; page: PageBox; last: Pt | null; removed: Map<string, InkStroke>; added: Map<string, InkStroke> }
   | { kind: 'lasso'; page: PageBox; points: Pt[] }
   | { kind: 'transform'; mode: 'move' | 'scale' | 'rotate'; page: PageBox; from: Pt; matrix: Matrix };
@@ -96,6 +118,9 @@ const ERASER_RADIUS = 10;
 const HANDLE = 7;
 const HANDLE_REACH = 22;
 const ROTATE_OFFSET = 30;
+/** Hold the pen this still (screen px) for this long (ms) to snap a shape. */
+const HOLD_SLOP = 6;
+const HOLD_MS = 500;
 /** Pasted and duplicated ink is offset this much (page px) so it's visibly a copy. */
 const COPY_OFFSET = 24;
 
@@ -111,6 +136,8 @@ export class InkEngine {
   size = 1;
   eraser: EraserMode = 'stroke';
   eraseHighlighterOnly = false;
+  /** Hold still at the end of a stroke to get a clean shape (INK-11). */
+  snapShapes = true;
 
   private host: HTMLElement;
   private paper: HTMLCanvasElement;
@@ -127,6 +154,9 @@ export class InkEngine {
   private pages: Array<{ id: string; paper: Paper }>;
   private boxes: PageBox[] = [];
   private layoutVersion = 0;
+  private elementsVersion = 0;
+  private elLayer: HTMLDivElement;
+  private elWorld: HTMLDivElement;
   private active = new Map<number, Active>();
   private sel: { pageId: string; ids: string[] } | null = null;
   private nav = new Map<number, Pt>();
@@ -147,10 +177,18 @@ export class InkEngine {
     this.opts = opts;
     this.settings = opts.settings ?? DEFAULT_ENGINE_SETTINGS;
     this.router = new InputRouter(this.settings);
-    this.model = new InkModel(opts.strokes);
+    this.model = new InkModel(opts.strokes, opts.elements);
     this.pages = opts.pages;
     this.paper = this.makeCanvas('paper');
     this.paperCtx = this.paper.getContext('2d')!;
+    // Text boxes and images (DOM) sit on the paper, under the ink, so you can write on them.
+    this.elLayer = document.createElement('div');
+    this.elLayer.dataset.layer = 'elements';
+    this.elLayer.style.cssText = 'position:absolute;inset:0;overflow:hidden;pointer-events:none;';
+    this.elWorld = document.createElement('div');
+    this.elWorld.style.cssText = 'position:absolute;left:0;top:0;transform-origin:0 0;';
+    this.elLayer.appendChild(this.elWorld);
+    host.appendChild(this.elLayer);
     this.dry = this.makeCanvas('dry');
     this.dryCtx = this.dry.getContext('2d')!;
     this.createWet();
@@ -179,6 +217,7 @@ export class InkEngine {
     this.resizeObserver.disconnect();
     for (const [t, type, fn, o] of this.listeners) t.removeEventListener(type, fn, o);
     this.paper.remove();
+    this.elLayer.remove();
     this.dry.remove();
     this.wet.remove();
   }
@@ -201,6 +240,7 @@ export class InkEngine {
       page: Math.max(0, this.boxes.findIndex((b) => b.id === this.currentPage()?.id)),
       pageCount: this.boxes.length,
       layout: this.layoutVersion,
+      elements: this.elementsVersion,
       selection: selected.length ? { count: selected.length, colour: same((s) => s.colour), size: same((s) => s.size) } : null,
       canPaste: !!clipboard,
     };
@@ -212,6 +252,54 @@ export class InkEngine {
 
   get pageBoxes(): readonly PageBox[] {
     return this.boxes;
+  }
+
+  /** Where React renders text boxes and images: a layer in world coordinates that follows the camera. */
+  get elementLayer(): HTMLElement {
+    return this.elWorld;
+  }
+
+  /** The page and page coordinates under a screen point (dropping an image, say). */
+  pagePointAt(clientX: number, clientY: number): { page: PageBox; x: number; y: number } | null {
+    const r = this.host.getBoundingClientRect();
+    const wx = (clientX - r.left - this.cam.x) / this.cam.zoom;
+    const wy = (clientY - r.top - this.cam.y) / this.cam.zoom;
+    const page = pageAt(this.boxes, wx, wy);
+    return page ? { page, x: wx - page.x, y: wy - page.y } : null;
+  }
+
+  /** The middle of the visible part of the page in view (page coordinates). */
+  viewCentre(): { page: PageBox; x: number; y: number } | null {
+    const page = this.currentPage();
+    if (!page) return null;
+    const v = visibleWorld(this.cam, this.view);
+    return {
+      page,
+      x: (Math.max(page.x, v.minX) + Math.min(page.x + page.w, v.maxX)) / 2 - page.x,
+      y: (Math.max(page.y, v.minY) + Math.min(page.y + page.h, v.maxY)) / 2 - page.y,
+    };
+  }
+
+  // ---- text boxes and images (INK-14) ----------------------------------------------
+
+  elements(pageId: string): InkElement[] {
+    return this.model.elements(pageId);
+  }
+
+  addElement(el: InkElement) {
+    this.commitChange({ added: [], removed: [], addedEls: [el] });
+  }
+
+  /** Replaces an element (moved, resized or edited). */
+  updateElement(el: InkElement) {
+    const before = this.model.element(el.id);
+    if (!before) return;
+    this.commitChange({ added: [], removed: [], removedEls: [before], addedEls: [el] });
+  }
+
+  removeElement(id: string) {
+    const before = this.model.element(id);
+    if (before) this.commitChange({ added: [], removed: [], removedEls: [before] });
   }
 
   /** The page in the middle of the view. */
@@ -257,11 +345,12 @@ export class InkEngine {
    * New page list (added, removed, reordered or new paper). `strokes` are those of pages the
    * engine hasn't seen (a restored or duplicated page). Keeps the view where it is.
    */
-  setPages(pages: Array<{ id: string; paper: Paper }>, strokes: InkStroke[] = []) {
+  setPages(pages: Array<{ id: string; paper: Paper }>, strokes: InkStroke[] = [], elements: InkElement[] = []) {
     const gone = this.pages.filter((p) => !pages.some((q) => q.id === p.id));
     for (const p of gone) this.model.dropPage(p.id);
     if (this.sel && gone.some((p) => p.id === this.sel!.pageId)) this.sel = null;
-    this.model.apply({ added: strokes, removed: [] });
+    this.model.apply({ added: strokes, removed: [], addedEls: elements });
+    if (gone.length || elements.length) this.elementsVersion++;
     this.pages = pages;
     this.relayout();
     this.setCamera(this.cam);
@@ -469,6 +558,7 @@ export class InkEngine {
 
   private setCamera(cam: Camera) {
     this.cam = clampCamera(cam, this.view, boundsOfPages(this.boxes));
+    this.elWorld.style.transform = `translate(${this.cam.x}px, ${this.cam.y}px) scale(${this.cam.zoom})`;
     this.dirtyStatic = true;
     this.requestFrame();
   }
@@ -483,6 +573,7 @@ export class InkEngine {
 
   /** After the model changed: relayout endless pages, repaint, save, update the toolbar. */
   private changed(c: StrokeChange) {
+    if (c.addedEls?.length || c.removedEls?.length) this.elementsVersion++;
     if (this.boxes.some((b) => b.paper.size === 'endless' || b.paper.size === 'infinite')) this.relayout();
     if (this.sel) {
       const ids = this.sel.ids.filter((id) => this.model.get(id));
@@ -522,6 +613,8 @@ export class InkEngine {
   }
 
   private onDown(e: PointerEvent) {
+    // Text boxes and images handle their own pointers (when the text tool or lasso is on).
+    if (e.target instanceof Element && e.target.closest('[data-ink-element]')) return;
     this.rect = this.host.getBoundingClientRect(); // the page may have scrolled since the last resize
     if (document.activeElement !== this.host) this.host.focus({ preventScroll: true });
     this.inertia.reset();
@@ -562,6 +655,11 @@ export class InkEngine {
     if (!page) return;
     // Pen eraser end, or the barrel button (configurable in P3.10), erases.
     const tool: InkTool = role.tool === 'primary' ? this.tool : 'eraser';
+    if (tool === 'text') {
+      const p = this.toPagePt(e, page);
+      this.opts.onPlaceText?.(page.id, Math.max(0, Math.min(page.w - 40, p.x)), Math.max(0, Math.min(page.h - 30, p.y)));
+      return;
+    }
     let a: Active;
     if (tool === 'eraser') a = { kind: 'erase', page, last: null, removed: new Map(), added: new Map() };
     else if (tool === 'lasso') a = { kind: 'lasso', page, points: [] };
@@ -576,7 +674,11 @@ export class InkEngine {
         predicted: [],
         pressure: this.settings.pressure && normalisePressure(e.pointerType, e.pressure) !== null,
         start: e.timeStamp,
+        anchor: { x: e.clientX, y: e.clientY },
+        hold: 0,
+        shape: null,
       };
+    if (a.kind === 'ink') this.armHold(a);
     this.active.set(e.pointerId, a);
     this.addSamples(a, [e]);
   }
@@ -607,6 +709,7 @@ export class InkEngine {
     const a = this.active.get(e.pointerId);
     if (a) {
       this.active.delete(e.pointerId);
+      if (a.kind === 'ink') clearTimeout(a.hold);
       if (cancelled && a.kind === 'ink' && a.points.length < 2) this.requestFrame();
       else this.finish(a);
     }
@@ -666,6 +769,7 @@ export class InkEngine {
     if (!a) return;
     this.active.delete(pointerId);
     if (a.kind === 'erase') this.model.apply({ added: [...a.removed.values()], removed: [...a.added.values()] });
+    if (a.kind === 'ink') clearTimeout(a.hold);
     this.dirtyStatic = true;
     this.requestFrame();
   }
@@ -675,6 +779,11 @@ export class InkEngine {
   private addSamples(a: Active, events: PointerEvent[]) {
     for (const ev of events) {
       if (a.kind === 'ink') {
+        if (a.shape) continue; // snapped: the shape stays until the pen lifts
+        if (Math.hypot(ev.clientX - a.anchor.x, ev.clientY - a.anchor.y) > HOLD_SLOP) {
+          a.anchor = { x: ev.clientX, y: ev.clientY };
+          this.armHold(a);
+        }
         const p = this.toInkPoint(ev, a.page, a.start);
         const last = a.points.at(-1);
         if (!last || last.x !== p.x || last.y !== p.y) a.points.push(p);
@@ -683,6 +792,20 @@ export class InkEngine {
       else a.matrix = this.transformFor(a, this.toPagePt(ev, a.page));
     }
     this.requestFrame();
+  }
+
+  /** (Re)starts the hold timer: if the pen stays put, try to snap the stroke to a shape. */
+  private armHold(a: Extract<Active, { kind: 'ink' }>) {
+    clearTimeout(a.hold);
+    if (!this.snapShapes || a.tool === 'highlighter') return;
+    a.hold = window.setTimeout(() => {
+      if (a.shape || ![...this.active.values()].includes(a)) return;
+      const shape = recognise(a.points);
+      if (!shape) return;
+      a.shape = { kind: shape.kind, points: shapeToInk(shape) };
+      a.predicted = [];
+      this.requestFrame();
+    }, HOLD_MS);
   }
 
   private eraseAt(a: Extract<Active, { kind: 'erase' }>, p: Pt) {
@@ -778,21 +901,29 @@ export class InkEngine {
       points: a.points,
       createdAt: nowIso(),
     });
-    const change = this.model.commit({ added: [stroke], removed: [] })!;
+    let change = this.model.commit({ added: [stroke], removed: [] })!;
+    let committed = stroke;
+    if (a.shape) {
+      // Two steps, so the first undo brings back the stroke as it was drawn.
+      this.opts.onChange?.(change);
+      committed = makeStroke({ ...stroke, id: newId(), points: a.shape.points, pressure: true });
+      change = this.model.commit({ added: [committed], removed: [stroke] })!;
+      this.opts.onSnap?.(a.shape.kind);
+    }
     // Paint it straight into the dry layer in the same frame the wet copy goes, so it never
     // flickers. Highlighter sits under ink, so it needs a full repaint.
     const box = this.boxes.find((b) => b.id === a.page.id) ?? a.page;
-    if (stroke.tool === 'highlighter') this.dirtyStatic = true;
+    if (stroke.tool === 'highlighter' || a.shape) this.dirtyStatic = true;
     else {
       this.enterPage(this.dryCtx, box);
-      fillStroke(this.dryCtx, stroke, box.paper.colour);
+      fillStroke(this.dryCtx, committed, box.paper.colour);
       this.dryCtx.restore();
     }
     this.requestFrame();
     this.opts.onChange?.(change);
     const endless = box.paper.size === 'endless' || box.paper.size === 'infinite';
     if (endless) this.relayout();
-    else if (this.boxes.at(-1)?.id === box.id && stroke.bbox[3] > box.h * 0.8) this.opts.onNearEnd?.();
+    else if (this.boxes.at(-1)?.id === box.id && committed.bbox[3] > box.h * 0.8) this.opts.onNearEnd?.();
     this.emit();
   }
 
@@ -863,8 +994,8 @@ export class InkEngine {
     for (const a of this.active.values()) {
       const box = this.boxes.find((b) => b.id === a.page.id) ?? a.page;
       if (a.kind === 'ink' && a.points.length) {
-        const pts = a.predicted.length ? [...a.points, ...a.predicted] : a.points;
-        const path = new Path2D(strokePath({ tool: a.tool, scale: a.size, points: pts, pressure: a.pressure, complete: false }));
+        const pts = a.shape ? a.shape.points : a.predicted.length ? [...a.points, ...a.predicted] : a.points;
+        const path = new Path2D(strokePath({ tool: a.tool, scale: a.size, points: pts, pressure: a.shape ? true : a.pressure, complete: !!a.shape }));
         this.enterPage(ctx, box);
         ctx.globalAlpha = PEN_STYLES[a.tool].opacity;
         ctx.fillStyle = resolveInk(a.colour, box.paper.colour);

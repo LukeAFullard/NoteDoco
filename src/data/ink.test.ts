@@ -144,3 +144,54 @@ describe('ink pages with undo', () => {
     expect((await loadInk(id)).doc.paper.template).toBe('blank');
   });
 });
+
+describe('text boxes and images', () => {
+  const element = (pageId: string, attachmentId: string | null = null) => ({
+    id: newId(),
+    pageId,
+    kind: (attachmentId ? 'image' : 'text') as 'image' | 'text',
+    x: 10,
+    y: 10,
+    w: 100,
+    h: 40,
+    text: attachmentId ? '' : 'Hello',
+    fontSize: 18,
+    colour: 'black',
+    attachmentId,
+    createdAt: new Date().toISOString(),
+  });
+
+  it('saves elements, copies them (and their pictures) on duplicate, and purges them', async () => {
+    const { addAttachment } = await import('./repos/attachments');
+    const { deletePageWithUndo } = await import('./actions');
+    const { undo } = await import('./undo');
+    const id = await createItem({ kind: 'ink' });
+    const page = (await loadInk(id)).pages[0]!;
+    const att = await addAttachment(id, new Blob(['png'], { type: 'image/png' }), 'a.png');
+    const text = element(page.id);
+    await saveStrokes(id, [], [], [text, element(page.id, att.id)]);
+    expect((await loadInk(id)).elements).toHaveLength(2);
+    expect(await discardIfEmpty(id)).toBe(false);
+
+    const copy = await duplicateItem(id);
+    const copied = (await loadInk(copy)).elements;
+    expect(copied).toHaveLength(2);
+    const img = copied.find((e) => e.kind === 'image')!;
+    expect(img.attachmentId).not.toBe(att.id);
+    expect((await db.attachments.get(img.attachmentId!))!.itemId).toBe(copy);
+
+    // Deleting a page takes its elements; undo brings them back.
+    const second = await addPage(id);
+    await saveStrokes(id, [], [], [element(second.id)]);
+    await deletePageWithUndo(id, second.id);
+    expect(await db.inkElements.where('pageId').equals(second.id).count()).toBe(0);
+    await undo();
+    expect(await db.inkElements.where('pageId').equals(second.id).count()).toBe(1);
+
+    await saveStrokes(id, [], [], [], [text.id]);
+    expect((await loadInk(id)).elements.filter((e) => e.pageId === page.id).map((e) => e.kind)).toEqual(['image']);
+    await deleteItemsForever([id, copy]);
+    expect(await db.inkElements.count()).toBe(0);
+    expect(await db.attachments.count()).toBe(0);
+  });
+});

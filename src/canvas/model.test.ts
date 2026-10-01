@@ -127,3 +127,28 @@ describe('ink tools on the model', () => {
     expect(m.canUndo).toBe(false);
   });
 });
+
+describe('text boxes and images in the model', () => {
+  const el = (id: string, pageId = 'p', x = 0) => ({ id, pageId, kind: 'text' as const, x, y: 0, w: 100, h: 20, text: 'hi', fontSize: 18, colour: 'black', attachmentId: null, createdAt: '' });
+
+  it('adds, moves and removes elements with undo', () => {
+    const m = new InkModel([], [el('a')]);
+    expect(m.elements('p').map((e) => e.id)).toEqual(['a']);
+    m.commit({ added: [], removed: [], removedEls: [el('a')], addedEls: [el('a', 'p', 50)] });
+    expect(m.element('a')!.x).toBe(50);
+    m.undo();
+    expect(m.element('a')!.x).toBe(0);
+    m.commit({ added: [], removed: [], removedEls: [el('a')] });
+    expect(m.elements('p')).toEqual([]);
+    m.undo();
+    expect(m.elements('p')).toHaveLength(1);
+  });
+
+  it('dropping a page drops its elements and their history', () => {
+    const m = new InkModel();
+    m.commit({ added: [], removed: [], addedEls: [el('a', 'gone')] });
+    m.dropPage('gone');
+    expect(m.element('a')).toBeUndefined();
+    expect(m.canUndo).toBe(false);
+  });
+});

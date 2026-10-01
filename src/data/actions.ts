@@ -303,10 +303,11 @@ export async function duplicatePageWithUndo(itemId: Id, pageId: Id): Promise<{ l
   const copy = await ink.duplicatePage(itemId, pageId);
   if (!copy) return null;
   const strokes = await db.strokes.where('pageId').equals(copy.id).toArray();
+  const elements = await db.inkElements.where('pageId').equals(copy.id).toArray();
   recordUndo({
     label: 'Duplicate page',
     undo: () => ink.removePage(itemId, copy.id),
-    redo: () => ink.restorePage({ itemId, page: copy, strokes }),
+    redo: () => ink.restorePage({ itemId, page: copy, strokes, elements }),
   });
   return { label: 'Page duplicated', pageId: copy.id };
 }

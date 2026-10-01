@@ -145,6 +145,88 @@ test.describe('ink notes', () => {
     await expect.poll(() => inkedPixels(page)).toBe(full);
   });
 
+  test('hold the pen still to snap a rough shape; undo keeps it as drawn', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'pen');
+    const canvas = await openNewInkNote(page);
+    const box = (await canvas.boundingBox())!;
+    const cdp = await page.context().newCDPSession(page);
+    const rough: Array<[number, number]> = [];
+    const corners: Array<[number, number]> = [[100, 100], [300, 104], [296, 220], [98, 216], [101, 102]];
+    for (let c = 0; c < 4; c++) {
+      const [ax, ay] = corners[c]!;
+      const [bx, by] = corners[c + 1]!;
+      for (let i = 0; i < 15; i++) rough.push([box.x + ax + ((bx - ax) * i) / 15 + Math.sin(i) * 2, box.y + ay + ((by - ay) * i) / 15 + Math.cos(i) * 2]);
+    }
+    rough.push([box.x + 101, box.y + 102]);
+    await penStroke(cdp, rough, 0.6, 800);
+    await expect(page.getByRole('status')).toContainText('Snapped to a rectangle');
+    const snapped = await inkedPixels(page);
+    await page.keyboard.press('Control+z');
+    await expect.poll(() => inkedPixels(page)).not.toBe(snapped);
+    expect(await inkedPixels(page)).toBeGreaterThan(100);
+  });
+
+  test('text boxes: type on the page, it saves; delete and undo by keyboard', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'keyboard');
+    const canvas = await openNewInkNote(page);
+    const box = (await canvas.boundingBox())!;
+    await canvas.focus();
+    await page.keyboard.press('t');
+    await page.mouse.click(box.x + 150, box.y + 120);
+    const editor = page.getByRole('textbox', { name: 'Text box' });
+    await expect(editor).toBeFocused();
+    await page.keyboard.type('Hello from the keyboard');
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('button', { name: 'Text box: Hello from the keyboard' })).toBeVisible();
+
+    await page.waitForTimeout(500);
+    await page.reload();
+    await expect(page.getByText('Hello from the keyboard')).toBeVisible();
+
+    // History starts fresh after a reload; delete it by keyboard, then undo that.
+    await expect(page.getByRole('button', { name: 'Undo' })).toBeDisabled();
+    await page.locator('label', { has: page.getByRole('radio', { name: /Text box/ }) }).click();
+    const textBox = page.getByRole('button', { name: 'Text box: Hello from the keyboard' });
+    await textBox.focus();
+    await page.keyboard.press('Delete');
+    await expect(page.getByText('Hello from the keyboard')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Undo' }).click();
+    await expect(page.getByText('Hello from the keyboard')).toBeVisible();
+  });
+
+  test('images: insert, move under ink, delete and undo', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'pen');
+    await openNewInkNote(page);
+    const png = await page.evaluate(async () => {
+      const c = new OffscreenCanvas(200, 100);
+      const ctx = c.getContext('2d')!;
+      ctx.fillStyle = '#3366cc';
+      ctx.fillRect(0, 0, 200, 100);
+      const bytes = new Uint8Array(await (await c.convertToBlob({ type: 'image/png' })).arrayBuffer());
+      return btoa(String.fromCharCode(...bytes));
+    });
+    await page.getByRole('button', { name: 'Pages and more' }).click();
+    const chooser = page.waitForEvent('filechooser');
+    await page.getByRole('menuitem', { name: 'Insert image…' }).click();
+    await (await chooser).setFiles({ name: 'blue.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
+    const img = page.locator('[data-layer="elements"] img');
+    await expect(img).toBeVisible();
+    await expect(page.getByRole('status')).toContainText('Image added');
+
+    // Ink goes on top of the image.
+    const ib = (await img.boundingBox())!;
+    const cdp = await page.context().newCDPSession(page);
+    await penStroke(cdp, Array.from({ length: 10 }, (_, i) => [ib.x + 10 + i * 5, ib.y + ib.height / 2] as [number, number]));
+    await expect.poll(() => inkedPixels(page)).toBeGreaterThan(10);
+
+    await page.locator('label', { has: page.getByRole('radio', { name: /Lasso/ }) }).click();
+    await page.getByRole('button', { name: 'Image' }).click();
+    await page.keyboard.press('Delete');
+    await expect(img).toHaveCount(0);
+    await page.getByRole('button', { name: 'Undo' }).click();
+    await expect(img).toBeVisible();
+  });
+
   test('pages: sorter deletes with undo; paper changes to lined', async ({ page, isMobile }) => {
     test.skip(isMobile, 'pen');
     const canvas = await openNewInkNote(page);

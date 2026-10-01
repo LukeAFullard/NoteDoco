@@ -206,7 +206,7 @@ export async function restoreItems(ids: Id[]): Promise<void> {
 
 /** Permanently deletes items and everything that belongs to them. Only the Trash calls this. */
 export async function deleteItemsForever(ids: Id[]): Promise<void> {
-  await db.transaction('rw', [db.items, db.noteBodies, db.stickyBodies, db.versions, db.attachments, db.links, db.taskRefs, db.inkDocs, db.inkPages, db.strokes], async () => {
+  await db.transaction('rw', [db.items, db.noteBodies, db.stickyBodies, db.versions, db.attachments, db.links, db.taskRefs, db.inkDocs, db.inkPages, db.strokes, db.inkElements], async () => {
     await db.items.bulkDelete(ids);
     await deleteInkBodies(ids);
     await db.noteBodies.bulkDelete(ids);
@@ -242,7 +242,7 @@ export async function emptyTrash(): Promise<number> {
  * straight away). It never had anything to restore, so it skips the Trash.
  */
 export async function discardIfEmpty(id: Id): Promise<boolean> {
-  return db.transaction('rw', [db.items, db.noteBodies, db.stickyBodies, db.inkDocs, db.inkPages, db.strokes], async () => {
+  return db.transaction('rw', [db.items, db.noteBodies, db.stickyBodies, db.inkDocs, db.inkPages, db.strokes, db.inkElements], async () => {
     const it = await db.items.get(id);
     if (!it) return false;
     if (it.kind === 'ink') {
