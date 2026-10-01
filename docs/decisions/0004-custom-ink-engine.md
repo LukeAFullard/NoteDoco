@@ -14,3 +14,6 @@ Build our own engine: Pointer Events with full-rate (coalesced) and predicted sa
 - Event-to-frame p95 under one frame (≈ 16 ms at 60 Hz, ≈ 8 ms at 120 Hz), with paint cost p95 under 4 ms.
 
 If iPad fails on feel alone, the fallback is a native wrapper (Capacitor) around the same web code, not a different engine.
+
+## Progress (1 Oct 2026)
+Everything that doesn't depend on the device results is built on this engine (Phase 3: `src/canvas/`, `src/features/ink/`; see ARCHITECTURE §8.6). If the iPad falls short, the fallback above still applies: it wraps the same web code. The device report decides the default palm-rejection thresholds, whether prediction and the low-latency canvas stay on, and the performance pass. The thresholds are already adjustable in Settings → Pen & ink, so the report's numbers can be tried before they become defaults.

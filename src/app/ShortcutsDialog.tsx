@@ -11,7 +11,7 @@ const SECTIONS: Array<[string, Array<[string, string[]]>]> = [
       ['Search and commands', [mod, 'K']],
       ['New note', ['N']],
       ['New sticky', ['S']],
-      ['New ink note', ['I']],
+      ['New ink note', ['D']],
       ['Undo / redo', [mod, 'Z']],
       ['Keyboard shortcuts', ['?']],
     ],

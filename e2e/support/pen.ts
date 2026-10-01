@@ -27,8 +27,8 @@ export async function penStroke(cdp: CDPSession, points: Array<[number, number]>
 }
 
 /** A finger drag (or several fingers at once) through the DevTools protocol. */
-export async function touchDrag(cdp: CDPSession, fingers: Array<Array<[number, number]>>) {
-  const at = (i: number) => fingers.map((f, id) => ({ x: f[Math.min(i, f.length - 1)]![0], y: f[Math.min(i, f.length - 1)]![1], id, radiusX: 4, radiusY: 4 }));
+export async function touchDrag(cdp: CDPSession, fingers: Array<Array<[number, number]>>, radius = 4) {
+  const at = (i: number) => fingers.map((f, id) => ({ x: f[Math.min(i, f.length - 1)]![0], y: f[Math.min(i, f.length - 1)]![1], id, radiusX: radius, radiusY: radius }));
   const steps = Math.max(...fingers.map((f) => f.length));
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: at(0) });
   for (let i = 1; i < steps; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: at(i) });

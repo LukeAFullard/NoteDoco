@@ -1,6 +1,6 @@
 # NoteDoco — Product Plan v2 (fresh start)
 
-> **Status:** Phases 0–2 built, and v2 is the live app (milestone M1, decision 0007) · 27 September 2026
+> **Status:** Phases 0–2 built, and v2 is the live app (milestone M1, decision 0007). Phase 3 (ink) built apart from tuning on real pen devices · 1 October 2026
 > **Replaces:** the v1 plan (still in git history: `git show 89b9564:PROJECT_PLAN.md`).
 > **Companion docs:** [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) covers how to build it. [`docs/RESEARCH.md`](docs/RESEARCH.md) covers what other apps and the web platform taught us, with sources.
 
@@ -105,7 +105,7 @@ An item can appear on **many boards**; it is the same item, not a copy. The time
 
 | ID | Feature | When |
 |---|---|---|
-| CAP-1 | **New** button plus shortcuts: `N` note, `S` sticky. `D` (ink note) and `B` (board) arrive with those kinds in P3/P4. | P1 |
+| CAP-1 | **New** button plus shortcuts: `N` note, `S` sticky, `D` ink note (P3). `B` (board) arrives with boards in P4. | P1 |
 | CAP-2 | Quick-capture bar: type one line and it becomes a sticky or note, with natural-language dates applied ("call Sam fri 3pm") | P2 |
 | CAP-3 | Inbox for unfiled captures, with fast triage (move, tag, date) by keyboard or drag | P1 |
 | CAP-4 | Paste or drag-drop anywhere: text, images, links and files become items or attachments | P1 |
@@ -459,6 +459,22 @@ No user-facing features yet. The goal is a solid base, and early answers to the 
 **M2 demo:** plan a week. Dated notes and stickies show on Today, the timeline and the calendar. Compare Work and Home lanes side by side, drag an item to Thursday, get a reminder, and add an item to the phone's calendar.
 
 ### Phase 3 — Ink → Milestone M3 "writing feels great"
+
+> **Status (1 Oct 2026):** P3.1–P3.10 built and tested, except what needs real pen hardware:
+> - 212 unit tests and 55 end-to-end tests, including pen and touch input sent through the browser's DevTools protocol (pressure, the eraser, lasso, shape snapping, pinch, palm-sized touches);
+> - startup JavaScript 174 KB gzipped (the ink editor, sketch previews and the PDF exporter all load on first use);
+> - database version 3 adds `inkElements` (text boxes and images on pages).
+>
+> **Waiting for the iPad ink-lab report (decision 0004):** default palm-rejection thresholds, prediction and low-latency canvas defaults, the performance pass (tiled dry ink for very full pages), and the M3 demo on real devices. The thresholds are already adjustable in Settings → Pen & ink.
+>
+> Changes from the plan:
+> - the toolbar can sit at the top, the side (on wider screens) or the bottom; a floating toolbar is left for later;
+> - left-handed mode moves the zoom bar and the side toolbar away from the writing hand;
+> - a second finger always turns a one-finger stroke into a pan or pinch (the stroke is dropped), so fingers can draw and still zoom;
+> - text boxes and images sit under the ink, so you can write on them;
+> - sketches open in a full-screen editor from a live preview in the note, rather than being drawn inline;
+> - PDF export keeps Western text as real text; text the standard PDF font can't write (emoji, CJK) is drawn as a picture of the text box;
+> - dry ink is redrawn from vectors on each camera move instead of being tiled; tiling waits for the performance pass on real devices.
 
 | ID | Task | Features | Size |
 |---|---|---|---|

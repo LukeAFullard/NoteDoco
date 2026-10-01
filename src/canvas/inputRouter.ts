@@ -4,7 +4,9 @@
  *  - the pen always wins;
  *  - touches are ignored while a pen is down or hovering, and briefly after pen-up;
  *  - large contact areas are treated as palms;
- *  - once a pen has been seen, fingers navigate instead of drawing (unless finger drawing is on);
+ *  - once a pen has been seen, fingers navigate instead of drawing (unless finger drawing is
+ *    set to "always");
+ *  - a second finger turns a one-finger stroke into a pan or pinch (the stroke is retracted);
  *  - a touch stroke that started just before a pen arrives is retracted.
  * Pure and clock-injected so it can be unit tested with recorded pointer sequences.
  */
@@ -27,6 +29,8 @@ export type Role =
 export interface RouterSettings {
   /** Let fingers draw when no pen has been seen. */
   fingerDraws: boolean;
+  /** Let fingers draw even after a pen has been seen (palm rejection then relies on size). */
+  fingerAlways?: boolean;
   /** Touches with width or height (CSS px) above this are palms. */
   palmSize: number;
   /** Ignore touches for this long after the pen lifts. */
@@ -84,7 +88,14 @@ export class InputRouter {
       if (e.timeStamp < this.penHoverUntil) return this.reject('pen-active');
       if (e.timeStamp - this.lastPenUp < s.penGraceMs) return this.reject('pen-recent');
       if (e.width > s.palmSize || e.height > s.palmSize) return this.reject('palm-size');
-      if (this.penSeen || !s.fingerDraws) return { role: { kind: 'navigate' }, retract: [] };
+      if ((this.penSeen && !s.fingerAlways) || !s.fingerDraws) return { role: { kind: 'navigate' }, retract: [] };
+      if (this.touchDraws.size) {
+        // A second finger: this is a pan or pinch, not two strokes.
+        const retract = [...this.touchDraws.keys()];
+        this.touchDraws.clear();
+        this.stats.retracted += retract.length;
+        return { role: { kind: 'navigate' }, retract };
+      }
       this.touchDraws.set(e.pointerId, e.timeStamp);
       return { role: { kind: 'draw', tool: 'primary' }, retract: [] };
     }

@@ -81,6 +81,7 @@ export function CommandPalette() {
     { id: 'tags', label: 'Tags', icon: <Hash size={16} />, run: () => navigate('/tags') },
     { id: 'lab', label: 'Ink lab', icon: <FlaskConical size={16} />, keywords: ['pen', 'stylus', 'draw'], run: () => navigate('/lab/ink') },
     { id: 'trash', label: 'Trash', icon: <Trash2 size={16} />, run: () => navigate('/trash') },
+    { id: 'pen-settings', label: 'Pen settings', icon: <PenLine size={16} />, keywords: ['stylus', 'palm', 'left-handed', 'pressure', 'ink'], run: () => navigate('/settings') },
     { id: 'settings', label: 'Settings', icon: <Settings size={16} />, keywords: ['preferences', 'backup'], run: () => navigate('/settings') },
     { id: 'dev', label: 'Design gallery', icon: <Palette size={16} />, keywords: ['design', 'components'], run: () => navigate('/dev') },
   ];

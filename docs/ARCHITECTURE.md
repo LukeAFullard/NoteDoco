@@ -144,7 +144,10 @@ interface InkDoc     { id: Id; itemId: Id | null; layout: 'pages' | 'block'; pap
 interface InkPage    { id: Id; docId: Id; order: OrderKey; paper: Paper;
                        background: { attachmentId: Id; pdfPage: number } | null }
 interface Stroke     { id: Id; pageId: Id; tool: StrokeTool; colour: string; size: number; opacity: number;
+                       pressure?: boolean; // false = the device gave none, so the renderer simulates it
                        points: Uint8Array; bbox: [number, number, number, number]; createdAt: Instant }
+interface InkElement { id: Id; pageId: Id; kind: 'text' | 'image'; x: number; y: number; w: number; h: number;
+                       text: string; fontSize: number; colour: string; attachmentId: Id | null; createdAt: Instant }
 interface Board      { itemId: Id; background: 'plain' | 'dots' | 'grid' | 'cork'; inkPageId: Id }
 interface BoardNode  { id: Id; boardId: Id; type: 'item' | 'text' | 'image' | 'frame'; itemId: Id | null;
                        x: number; y: number; w: number; h: number; rotation: number; z: OrderKey; style: NodeStyle }
@@ -170,7 +173,7 @@ interface Setting    { key: string; value: unknown }
 **Indexes:**
 
 - items: `kind`, `[groupId+order]`, `tags` (multi-entry), `when.start`, `due.start`, `createdAt`, `updatedAt`, `deletedAt`
-- strokes: `pageId`
+- strokes and inkElements: `pageId`
 - boardNodes: `boardId`, `itemId`
 - links: `fromItemId`, `toItemId`
 - taskRefs: `itemId`, `date` (`done` is filtered in memory: IndexedDB can't index booleans)
@@ -179,6 +182,8 @@ interface Setting    { key: string; value: unknown }
 Items with no date simply don't appear in the date indexes. That's what we want.
 
 **Version 2 (Phase 2)** added a `recurrence` index on items (only repeating items have a string there, so it lists exactly them) and filled `taskRefs` for existing notes. `taskRefs` is derived data: it's rewritten on every body save, and rebuilt after a restore or the v1 migration rather than trusted from a backup. `data/agenda.ts` holds the shared date queries (`placedBetween` with repeats expanded, dated checklist lines, overdue items) used by Today, Tasks, the timeline and the calendar.
+
+**Version 3 (Phase 3)** added the `inkElements` table (text boxes and images on ink pages). Ink colours are stored as palette keys (`"blue"`) or `#rrggbb`, so the same stroke reads well on white, cream and dark paper. A typed note's sketch is an `InkDoc` with `layout: 'block'` and `itemId` = the note, written in its Markdown as `![sketch](ndoco:ink/<doc id>)`.
 
 ## 5. Storage and durability
 
@@ -282,6 +287,27 @@ How strokes are drawn:
 - Wet-stroke script work under 4 ms per frame; stroke commit under 8 ms.
 - 60 fps pan/zoom on a page with 20,000 strokes; page open under 300 ms.
 
+### 8.6 As built (Phase 3)
+
+| Module | What it does |
+|---|---|
+| `canvas/camera.ts` | Camera maths (`screen = world × zoom + offset`), fit-width, clamping so pages stay reachable, fling inertia |
+| `canvas/paper.ts` | Page sizes (CSS px at 96 dpi, so pages print at real size), vertical page layout, templates drawn with canvas calls |
+| `canvas/inputRouter.ts` | Palm-rejection state machine (pure, unit tested); a second finger turns a one-finger stroke into a pinch |
+| `canvas/model.ts` | Strokes per page with an `rbush` index; undo/redo as change sets of strokes and elements; precise-erase splitting; lasso hit-testing; transforms |
+| `canvas/engine.ts` | Input, camera, tools and rendering; reports changes (`onChange`) for saving and state (`onState`) for the toolbar |
+| `canvas/render.ts` | Shared drawing for the canvas, page thumbnails, PNG and print |
+| `canvas/shapes.ts` | Shape recognition (RDP corners, rectangle and ellipse fits) |
+| `canvas/export.ts` | PDF, SVG, PNG and print (lazy). Paper is drawn into a recording context and replayed as SVG or PDF |
+| `features/ink/` | The editor (`InkSurface`), toolbar, pickers, selection bar, page sorter, paper and pen settings, text boxes and images, sketch dialog and preview, thumbnails |
+
+- **Coordinates:** world space stacks the pages centred on x = 0; strokes and elements are stored in *page* coordinates, so reordering pages never rewrites them.
+- **Layers as built:** paper canvas → DOM layer for text boxes and images (moved with one CSS transform) → dry ink canvas → wet canvas (the stroke being drawn, the lasso, a selection being moved, and selection handles). All canvases are viewport-sized and redrawn from vectors when the camera moves; tiles are part of the performance pass after device testing.
+- **Saving:** every user action is one change set, saved in order through a queue in the editor (one small record per stroke). Undo and redo are change sets too, so they save the same way. Page operations (add, move, duplicate, delete, paper) go through app-level undo with a toast; the editor reads pages with a live query, so those undos and other panes show up straight away.
+- **Shape snapping:** a stroke held still for 500 ms is recognised; the clean shape replaces it as a second change, so Undo first brings back the stroke as drawn.
+- **Thumbnails:** a few seconds after writing stops, the top of page 1 is drawn into an attachment and linked from `Item.thumbnailId` (the previous one is deleted: it's a cache, not content).
+- **Pen settings** (Settings → Pen & ink, per device): hand, toolbar position, pressure curve, fingers, pen button, shape snapping, prediction, and the palm-rejection thresholds. The thresholds are starting points until the iPad report sets the defaults.
+
 ## 9. Board engine
 
 - **Shares the canvas core** (camera, input, gestures, ink layers) with ink notes.
@@ -360,7 +386,7 @@ So the design is:
 | Backup `notedoco-backup-YYYY-MM-DD.zip` | Both | `manifest.json` (format, versions, counts), `data/<table>.json` (binary fields as base64), `attachments/<id>` as real files. Restore by merge (newest `updatedAt` wins; bodies follow their item) or replace. Built: `src/backup/backup.ts` |
 | Markdown `.md` with YAML front matter | Both | Front matter holds id, group, tags, dates, colour; sketches exported as SVG assets |
 | Plain text `.txt` | Both | — |
-| PDF / SVG / PNG | Export | Ink pages (vector PDF via `pdf-lib`), boards, timeline (P5) |
+| PDF / SVG / PNG | Export | Ink notes: vector PDF via `pdf-lib`, one SVG, a page as PNG, and print (built: `src/canvas/export.ts`). Boards and the timeline in P5 |
 | JSON Canvas `.canvas` | Both | Boards; interoperable with Obsidian (P5) |
 | Obsidian-style folder (zip) | Export | Folders = groups, `.md` notes, `.canvas` boards, `assets/` (P5) |
 | iCalendar `.ics` | Export | Dated items as `VEVENT`, tasks as `VTODO` |

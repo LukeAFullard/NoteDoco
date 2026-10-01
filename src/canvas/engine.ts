@@ -1,4 +1,5 @@
-import { InputRouter, DEFAULT_ROUTER_SETTINGS, type PointerSample, type RouterSettings } from './inputRouter';
+import { InputRouter, type PointerSample } from './inputRouter';
+import { DEFAULT_ENGINE_SETTINGS, type EngineSettings } from './settings';
 import { normalisePressure, type InkPoint } from './points';
 import { PEN_STYLES, strokePath, type PenTool } from './strokeStyle';
 import { clampCamera, fitWidth, Inertia, visibleWorld, zoomAt, type Camera, type Rect, type Size } from './camera';
@@ -26,24 +27,8 @@ import { newId, nowIso } from '@/lib/ids';
 export type InkTool = PenTool | 'eraser' | 'lasso' | 'text';
 export type EraserMode = 'stroke' | 'precise';
 
-export interface EngineSettings extends RouterSettings {
-  /** Read every hardware sample (getCoalescedEvents). */
-  coalesced: boolean;
-  /** Draw a predicted tail while writing (getPredictedEvents). Never stored. */
-  prediction: boolean;
-  /** Ask for a low-latency (desynchronized) canvas for wet ink. */
-  lowLatency: boolean;
-  /** Use pen pressure where the device reports it. */
-  pressure: boolean;
-}
-
-export const DEFAULT_ENGINE_SETTINGS: EngineSettings = {
-  ...DEFAULT_ROUTER_SETTINGS,
-  coalesced: true,
-  prediction: true,
-  lowLatency: true,
-  pressure: true,
-};
+export type { EngineSettings };
+export { DEFAULT_ENGINE_SETTINGS };
 
 export interface EngineState {
   tool: InkTool;
@@ -138,8 +123,6 @@ export class InkEngine {
   size = 1;
   eraser: EraserMode = 'stroke';
   eraseHighlighterOnly = false;
-  /** Hold still at the end of a stroke to get a clean shape (INK-11). */
-  snapShapes = true;
 
   private host: HTMLElement;
   private paper: HTMLCanvasElement;
@@ -162,6 +145,8 @@ export class InkEngine {
   private active = new Map<number, Active>();
   private sel: { pageId: string; ids: string[] } | null = null;
   private nav = new Map<number, Pt>();
+  /** Last screen position of every pointer that's down (to hand a finger over to a pinch). */
+  private pointerPos = new Map<number, Pt>();
   private navGesture: NavGesture | null = null;
   private inertia = new Inertia();
   private coastFrom = 0;
@@ -604,7 +589,9 @@ export class InkEngine {
   }
 
   private toInkPoint(e: PointerEvent, page: PageBox, start: number): InkPoint {
-    return { ...this.toPagePt(e, page), p: normalisePressure(e.pointerType, e.pressure) ?? 0.5, t: Math.max(0, e.timeStamp - start) };
+    const raw = normalisePressure(e.pointerType, e.pressure);
+    const p = raw === null ? 0.5 : Math.pow(raw, this.settings.pressureGamma);
+    return { ...this.toPagePt(e, page), p, t: Math.max(0, e.timeStamp - start) };
   }
 
   private onKey(e: KeyboardEvent, down: boolean) {
@@ -622,7 +609,13 @@ export class InkEngine {
     this.inertia.reset();
     const { role, retract } =
       this.spaceDown && e.pointerType !== 'touch' ? { role: { kind: 'navigate' as const }, retract: [] } : this.router.down(this.sample(e));
-    for (const id of retract) this.discard(id);
+    this.pointerPos.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    for (const id of retract) {
+      this.discard(id);
+      // A finger that was drawing joins the pinch that a second finger started.
+      const at = this.pointerPos.get(id);
+      if (role.kind === 'navigate' && at) this.nav.set(id, at);
+    }
 
     if (role.kind === 'ignore') return;
     try {
@@ -655,8 +648,8 @@ export class InkEngine {
     const w = this.toWorld(e);
     const page = pageAt(this.boxes, w.x, w.y);
     if (!page) return;
-    // Pen eraser end, or the barrel button (configurable in P3.10), erases.
-    const tool: InkTool = role.tool === 'primary' ? this.tool : 'eraser';
+    // The pen's eraser end erases; its barrel button erases or lassoes (a setting).
+    const tool: InkTool = role.tool === 'primary' ? this.tool : role.tool === 'secondary' ? this.settings.barrel : 'eraser';
     if (tool === 'text') {
       const p = this.toPagePt(e, page);
       this.opts.onPlaceText?.(page.id, Math.max(0, Math.min(page.w - 40, p.x)), Math.max(0, Math.min(page.h - 30, p.y)));
@@ -686,6 +679,7 @@ export class InkEngine {
   }
 
   private onMove(e: PointerEvent) {
+    if (this.pointerPos.has(e.pointerId)) this.pointerPos.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (e.pointerType === 'pen' && e.buttons === 0) {
       this.router.hover(this.sample(e));
       return;
@@ -708,6 +702,7 @@ export class InkEngine {
 
   private onUp(e: PointerEvent, cancelled = false) {
     this.router.up(this.sample(e));
+    this.pointerPos.delete(e.pointerId);
     const a = this.active.get(e.pointerId);
     if (a) {
       this.active.delete(e.pointerId);
@@ -799,7 +794,7 @@ export class InkEngine {
   /** (Re)starts the hold timer: if the pen stays put, try to snap the stroke to a shape. */
   private armHold(a: Extract<Active, { kind: 'ink' }>) {
     clearTimeout(a.hold);
-    if (!this.snapShapes || a.tool === 'highlighter') return;
+    if (!this.settings.snapShapes || a.tool === 'highlighter') return;
     a.hold = window.setTimeout(() => {
       if (a.shape || ![...this.active.values()].includes(a)) return;
       const shape = recognise(a.points);

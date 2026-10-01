@@ -1,5 +1,6 @@
-import { ClipboardPaste, Ellipsis, FileDown, FilePlus2, Files, ImageDown, ImagePlus, NotebookText, Printer, Redo2, SquareDashedMousePointer, Star, Undo2 } from 'lucide-react';
+import { ClipboardPaste, Ellipsis, Settings2, FileDown, FilePlus2, Files, ImageDown, ImagePlus, NotebookText, Printer, Redo2, SquareDashedMousePointer, Star, Undo2 } from 'lucide-react';
 import { Separator } from 'react-aria-components';
+import { cn } from '@/design/cn';
 import type { InkExport } from './exportInk';
 import { Radio, RadioGroup } from 'react-aria-components';
 import { IconButton } from '@/design/Button';
@@ -14,6 +15,10 @@ export interface ToolbarProps {
   state: EngineState;
   /** A sketch in a typed note: one page, so no page commands. */
   block?: boolean;
+  /** Toolbar down the side (on wider screens) or along the bottom (INK-23). */
+  side?: boolean;
+  bottom?: boolean;
+  onPenSettings: () => void;
   favourites: Favourite[];
   onTool: (t: InkTool) => void;
   onColour: (c: string) => void;
@@ -40,9 +45,21 @@ export function InkToolbar(p: ToolbarProps) {
   const { state } = p;
   const pen = isPen(state.tool);
   const current: Favourite | null = pen ? { tool: state.tool as PenTool, colour: state.colour, size: state.size } : null;
+  // Down the side on wider screens: groups stack, separators turn horizontal.
+  const v = (cls: string) => (p.side ? cls : '');
+  const group = cn('flex items-center gap-0.5', v('sm:flex-col'));
+  const sep = cn('h-6 w-px bg-border', v('sm:h-px sm:w-6'));
   return (
-    <div role="toolbar" aria-label="Pens" className="flex flex-wrap items-center gap-x-1.5 gap-y-1 border-b border-border bg-surface px-2 py-1.5">
-      <RadioGroup aria-label="Tool" orientation="horizontal" value={state.tool} onChange={(v) => p.onTool(v as InkTool)} className="flex gap-0.5">
+    <div
+      role="toolbar"
+      aria-label="Pens"
+      className={cn(
+        'flex shrink-0 flex-wrap items-center gap-x-1.5 gap-y-1 bg-surface px-2 py-1.5',
+        p.bottom ? 'border-t border-border' : 'border-b border-border',
+        v('sm:flex-col sm:flex-nowrap sm:overflow-y-auto sm:border-b-0 sm:border-x sm:px-1 sm:py-2'),
+      )}
+    >
+      <RadioGroup aria-label="Tool" orientation="horizontal" value={state.tool} onChange={(v) => p.onTool(v as InkTool)} className={group}>
         {TOOLS.map((t) => (
           <Radio key={t.tool} value={t.tool} aria-label={`${t.label} (${t.key})`} className={radioCls}>
             <span aria-hidden>{t.icon}</span>
@@ -50,7 +67,7 @@ export function InkToolbar(p: ToolbarProps) {
         ))}
       </RadioGroup>
 
-      <span className="flex items-center gap-0.5">
+      <span className={group}>
         {state.tool === 'eraser' ? (
           <EraserOptions mode={state.eraser} highlighterOnly={state.eraseHighlighterOnly} onChange={p.onEraser} />
         ) : state.tool === 'lasso' ? null : state.tool === 'text' ? (
@@ -63,10 +80,10 @@ export function InkToolbar(p: ToolbarProps) {
         )}
       </span>
 
-      <span className="h-6 w-px bg-border" aria-hidden />
+      <span className={sep} aria-hidden />
 
       {/* Favourite pens (INK-5). */}
-      <span role="group" aria-label="Favourite pens" className="flex items-center gap-0.5">
+      <span role="group" aria-label="Favourite pens" className={group}>
         {p.favourites.map((f, i) => {
           const tool = TOOLS.find((t) => t.tool === f.tool)!;
           const on = !!current && sameFavourite(f, current);
@@ -103,9 +120,9 @@ export function InkToolbar(p: ToolbarProps) {
         </Menu>
       </span>
 
-      <span className="h-6 w-px bg-border" aria-hidden />
+      <span className={sep} aria-hidden />
 
-      <span className="flex gap-0.5">
+      <span className={group}>
         <IconButton label="Undo" size="sm" isDisabled={!state.canUndo} onPress={p.onUndo} className="h-9 w-9">
           <Undo2 size={18} />
         </IconButton>
@@ -141,6 +158,9 @@ export function InkToolbar(p: ToolbarProps) {
           </MenuItem>
           <MenuItem textValue="Paste" onAction={p.onPaste} isDisabled={!state.canPaste}>
             <ClipboardPaste size={15} aria-hidden /> Paste
+          </MenuItem>
+          <MenuItem textValue="Pen settings" onAction={p.onPenSettings}>
+            <Settings2 size={15} aria-hidden /> Pen settings…
           </MenuItem>
           <Separator className="my-1 h-px bg-border" />
           <MenuItem textValue="Export as PDF" onAction={() => p.onExport('pdf')}>

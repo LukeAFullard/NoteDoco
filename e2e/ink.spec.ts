@@ -298,23 +298,61 @@ test.describe('ink notes', () => {
     await expect(canvas).toBeVisible();
   });
 
-  test('a finger draws on a phone; two fingers scroll the page', async ({ page, isMobile }) => {
+  test('touch: a finger draws, two fingers pan and zoom, a palm is ignored, and after a pen fingers only move', async ({ page, isMobile }) => {
     test.skip(!isMobile, 'touch');
     const canvas = await openNewInkNote(page);
     const box = (await canvas.boundingBox())!;
     const cdp = await page.context().newCDPSession(page);
+    const strokes = () => canvas.getAttribute('data-strokes');
     await touchDrag(cdp, [Array.from({ length: 20 }, (_, i) => [box.x + 40 + i * 8, box.y + 80 + (i % 5) * 4] as [number, number])]);
+    await expect.poll(strokes).toBe('1');
     await expect.poll(() => inkedPixels(page)).toBeGreaterThan(50);
-    const before = await inkedPixels(page);
 
-    // Two fingers dragging up scroll the page instead of drawing.
+    // Two fingers: a pinch, not two strokes.
+    const zoom = page.getByLabel(/^Zoom \d+ percent$/);
+    const before = await zoom.getAttribute('aria-label');
     await touchDrag(cdp, [
-      Array.from({ length: 10 }, (_, i) => [box.x + 100, box.y + 300 - i * 20] as [number, number]),
-      Array.from({ length: 10 }, (_, i) => [box.x + 200, box.y + 300 - i * 20] as [number, number]),
+      Array.from({ length: 10 }, (_, i) => [box.x + 150 - i * 8, box.y + 300] as [number, number]),
+      Array.from({ length: 10 }, (_, i) => [box.x + 200 + i * 8, box.y + 300] as [number, number]),
     ]);
-    await expect.poll(() => inkedPixels(page)).not.toBe(before);
+    await expect.poll(() => zoom.getAttribute('aria-label')).not.toBe(before);
+    expect(await strokes()).toBe('1');
+
+    // A palm-sized touch does nothing.
+    await touchDrag(cdp, [Array.from({ length: 10 }, (_, i) => [box.x + 60 + i * 10, box.y + 400] as [number, number])], 40);
+    expect(await strokes()).toBe('1');
+
+    // Once a pen has been used, a finger moves the page instead of drawing.
+    await penStroke(cdp, Array.from({ length: 10 }, (_, i) => [box.x + 60 + i * 10, box.y + 200] as [number, number]));
+    await expect.poll(strokes).toBe('2');
+    await page.waitForTimeout(400); // past the pen's grace period
+    await touchDrag(cdp, [Array.from({ length: 10 }, (_, i) => [box.x + 100, box.y + 400 - i * 15] as [number, number])]);
+    expect(await strokes()).toBe('2');
     const { scroll, client } = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }));
     expect(scroll).toBeLessThanOrEqual(client);
+  });
+
+  test('pen settings: left hand and a side toolbar move the controls; settings persist', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'wide layout');
+    await openNewInkNote(page);
+    const zoomBar = page.getByRole('button', { name: 'Zoom in' });
+    const canvasBox = (await page.getByTestId('ink-canvas').boundingBox())!;
+    expect((await zoomBar.boundingBox())!.x).toBeLessThan(canvasBox.x + canvasBox.width / 2); // right-handed: on the left
+
+    await page.getByRole('button', { name: 'Pages and more' }).click();
+    await page.getByRole('menuitem', { name: 'Pen settings…' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Pen settings' });
+    await dialog.getByRole('radio', { name: 'Left hand' }).check({ force: true });
+    await dialog.getByRole('radio', { name: 'Side (wider screens)' }).check({ force: true });
+    await page.keyboard.press('Escape');
+
+    const after = (await page.getByTestId('ink-canvas').boundingBox())!;
+    expect((await zoomBar.boundingBox())!.x).toBeGreaterThan(after.x + after.width / 2);
+    // Left-handed side toolbar: on the right of the page.
+    expect((await page.getByRole('toolbar', { name: 'Pens' }).boundingBox())!.x).toBeGreaterThan(after.x);
+
+    await page.goto('/#/settings');
+    await expect(page.getByRole('radio', { name: 'Left hand' })).toBeChecked();
   });
 });
 

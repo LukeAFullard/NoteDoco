@@ -29,7 +29,7 @@ export function useGlobalShortcuts(actions: ShortcutActions) {
         const k = e.key.toLowerCase();
         if (k === 'n') return void (e.preventDefault(), actions.newNote());
         if (k === 's') return void (e.preventDefault(), actions.newSticky());
-        if (k === 'i') return void (e.preventDefault(), actions.newInk());
+        if (k === 'd') return void (e.preventDefault(), actions.newInk());
         if (e.key === '?') return void (e.preventDefault(), actions.showShortcuts());
       }
       if (mod && e.key.toLowerCase() === 'z') {

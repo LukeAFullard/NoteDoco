@@ -22,7 +22,7 @@ export function NewMenu({ className, compact, defaultOpen }: { className?: strin
         <FilePlus size={15} aria-hidden /> <span className="flex-1">Note</span> <Kbd>N</Kbd>
       </MenuItem>
       <MenuItem onAction={() => void create.ink()}>
-        <PenLine size={15} aria-hidden /> <span className="flex-1">Ink note</span> <Kbd>I</Kbd>
+        <PenLine size={15} aria-hidden /> <span className="flex-1">Ink note</span> <Kbd>D</Kbd>
       </MenuItem>
       <MenuItem onAction={() => void create.sticky()}>
         <StickyNote size={15} aria-hidden /> <span className="flex-1">Sticky</span> <Kbd>S</Kbd>

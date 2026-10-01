@@ -23,6 +23,10 @@ import { PaperDialog } from './PaperDialog';
 import { TOOLS } from './tools';
 import { ElementsLayer, type DraftText } from './ElementsLayer';
 import { addFavourite, DEFAULT_FAVOURITES, removeFavourite, type Favourite } from './favourites';
+import { engineSettings, usePenSettings } from './penSettings';
+import { PenSettingsPanel } from './PenSettingsPanel';
+import { Dialog } from '@/design/Dialog';
+import { cn } from '@/design/cn';
 
 interface PenPrefs {
   tool: InkTool;
@@ -119,7 +123,8 @@ export function InkSurface({ itemId, docId: sketchId, block = false }: { itemId:
   const [error, setError] = useState<string | null>(null);
   const [state, setState] = useState<EngineState | null>(null);
   const [announcement, setAnnouncement] = useState('');
-  const [dialog, setDialog] = useState<'pages' | 'paper' | null>(null);
+  const [dialog, setDialog] = useState<'pages' | 'paper' | 'pen' | null>(null);
+  const pen = usePenSettings();
   const [editing, setEditingState] = useState<DraftText | null>(null);
   const editingAt = useRef(0);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -191,7 +196,9 @@ export function InkSurface({ itemId, docId: sketchId, block = false }: { itemId:
         const host = hostRef.current;
         if (!live || !host) return;
         const p = prefs();
+        const ps = usePenSettings.getState();
         created = new InkEngine(host, {
+          settings: engineSettings(ps),
           pages,
           strokes: strokes.map(fromStored),
           elements,
@@ -220,6 +227,12 @@ export function InkSurface({ itemId, docId: sketchId, block = false }: { itemId:
       setEngine(null);
     };
   }, [itemId, sketchId, block, save, appendPage, placeText, scheduleThumb]);
+
+  // Pen settings apply straight away, in every open ink editor.
+  useEffect(() => {
+    if (!engine) return;
+    engine.updateSettings(engineSettings(pen));
+  }, [engine, pen]);
 
   // Pages come from storage, so undo from a toast, the page sorter and other panes all show up.
   const pages = useLiveQuery(() => (docId ? listPages(docId) : undefined), [docId]);
@@ -369,11 +382,24 @@ export function InkSurface({ itemId, docId: sketchId, block = false }: { itemId:
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col" onKeyDown={onKeyDown} onPaste={onPaste} onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
+    <div
+      className={cn(
+        'flex h-full min-h-0 flex-1',
+        // Toolbar position (INK-23). On narrow screens a side toolbar sits on top instead.
+        pen.toolbar === 'bottom' ? 'flex-col-reverse' : 'flex-col',
+        pen.toolbar === 'side' && (pen.hand === 'left' ? 'sm:flex-row-reverse' : 'sm:flex-row'),
+      )}
+      onKeyDown={onKeyDown}
+      onPaste={onPaste}
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={onDrop}
+    >
       {engine && state && (
         <InkToolbar
           state={state}
           block={block}
+          side={pen.toolbar === 'side'}
+          bottom={pen.toolbar === 'bottom'}
           favourites={favourites}
           onTool={setTool}
           onColour={setColour}
@@ -397,13 +423,14 @@ export function InkSurface({ itemId, docId: sketchId, block = false }: { itemId:
           onPaste={() => engine.paste() && say('Pasted.')}
           onSelectAll={() => engine.selectAll()}
           onInsertImage={() => fileInput.current?.click()}
+          onPenSettings={() => setDialog('pen')}
           onExport={(kind) => {
             say(kind === 'print' ? 'Preparing to print…' : 'Exporting…');
             void import('./exportInk').then((m) => m.exportInk(kind, itemId, { docId: sketchId, page: state.page }));
           }}
         />
       )}
-      <div className="relative min-h-0 flex-1">
+      <div className="relative min-h-0 min-w-0 flex-1">
         <div
           ref={hostRef}
           tabIndex={0}
@@ -411,6 +438,7 @@ export function InkSurface({ itemId, docId: sketchId, block = false }: { itemId:
           aria-roledescription="drawing canvas"
           aria-label="Ink pages. Write with a pen, mouse or finger; two fingers move and zoom. Arrow keys scroll, plus and minus zoom, P F M H E L pick a tool."
           data-testid="ink-canvas"
+          data-strokes={state?.strokeCount}
           className="absolute inset-0 touch-none overflow-hidden bg-desk outline-none select-none [-webkit-touch-callout:none] focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset"
         />
         {!engine && <p className="absolute inset-x-0 top-8 text-center text-sm text-muted">Opening…</p>}
@@ -427,7 +455,13 @@ export function InkSurface({ itemId, docId: sketchId, block = false }: { itemId:
           />
         )}
         {engine && state && (
-          <div className="absolute right-2 bottom-2 flex items-center gap-0.5 rounded-panel border border-border bg-surface/95 p-0.5 text-sm shadow">
+          // Away from the writing hand.
+          <div
+            className={cn(
+              'absolute bottom-2 flex items-center gap-0.5 rounded-panel border border-border bg-surface/95 p-0.5 text-sm shadow',
+              pen.hand === 'left' ? 'right-2' : 'left-2',
+            )}
+          >
             {!block && (
               <button
                 type="button"
@@ -489,6 +523,13 @@ export function InkSurface({ itemId, docId: sketchId, block = false }: { itemId:
             engine.scrollToPage(i);
           }}
         />
+      )}
+      {dialog === 'pen' && (
+        <Dialog isOpen onOpenChange={(o) => !o && setDialog(null)} title="Pen settings">
+          <div className="p-5">
+            <PenSettingsPanel />
+          </div>
+        </Dialog>
       )}
       {engine && dialog === 'paper' && <PaperDialogFor engine={engine} itemId={itemId} block={block} onClose={() => setDialog(null)} />}
     </div>

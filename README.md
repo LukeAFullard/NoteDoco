@@ -14,7 +14,8 @@ NoteDoco 2 is built from the plan in [`PROJECT_PLAN.md`](PROJECT_PLAN.md). It re
 - **Phase 0 (foundation) is in place:** design system, data layer, app shell, installable PWA, the ink lab, and the editor spike.
 - **Phase 1 (notes, stickies and groups) is built:** the formatted note editor, sticky wall, groups with drag and drop, tags, search, history, trash, backup/restore, Markdown import/export, and automatic import of v1 notes.
 - **Phase 2 (time and side by side) is built:** dates, due dates, repeats and reminders on any item; Today, Tasks, the timeline (lanes by group, tag, kind or colour, from hours to years), the calendar, add-to-calendar (.ics), split view and groups side by side.
-- **Next:** Phase 3: handwriting (after the iPad ink tests).
+- **Phase 3 (ink) is built, apart from tuning on real pen devices:** handwritten ink notes with pages, paper templates, pressure-sensitive pens, highlighter, erasers, lasso, shape snapping, text boxes and images, sketches inside typed notes, and PDF/SVG/PNG export and printing. Palm rejection and pen latency get their final tuning from the iPad ink-lab results.
+- **Next:** the iPad tests, then Phase 4: boards.
 
 ## Documents
 - [`PROJECT_PLAN.md`](PROJECT_PLAN.md): features, screens and roadmap
