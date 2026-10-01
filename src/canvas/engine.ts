@@ -2,7 +2,7 @@ import { InputRouter, DEFAULT_ROUTER_SETTINGS, type PointerSample, type RouterSe
 import { normalisePressure, type InkPoint } from './points';
 import { PEN_STYLES, strokePath, type PenTool } from './strokeStyle';
 import { clampCamera, fitWidth, Inertia, visibleWorld, zoomAt, type Camera, type Rect, type Size } from './camera';
-import { boundsOfPages, drawPaper, layoutPages, pageAt, type PageBox } from './paper';
+import { BLOCK_SIZE, boundsOfPages, drawPaper, layoutPages, pageAt, type PageBox } from './paper';
 import { resolveInk } from './inkColours';
 import { boundsOfStrokes, InkModel, makeStroke, splitStroke, transformStroke, type InkStroke, type StrokeChange } from './model';
 import { along, applyMatrix, IDENTITY, rotateAbout, scaleAbout, translate, type Matrix } from './geometry';
@@ -71,6 +71,8 @@ export interface EngineOptions {
   pages: Array<{ id: string; paper: Paper }>;
   strokes: InkStroke[];
   elements?: InkElement[];
+  /** A sketch block in a typed note: one short endless page. */
+  block?: boolean;
   settings?: EngineSettings;
   onState?: (s: EngineState) => void;
   /** A user action changed strokes: save it. Also called for undo and redo. */
@@ -551,7 +553,7 @@ export class InkEngine {
   }
 
   private relayout() {
-    this.boxes = layoutPages(this.pages, (id) => this.model.contentBottom(id));
+    this.boxes = layoutPages(this.pages, (id) => this.model.contentBottom(id), this.opts.block ? BLOCK_SIZE : undefined);
     this.layoutVersion++;
     this.dirtyStatic = true;
   }

@@ -10,6 +10,8 @@ import { favouriteLabel, MAX_FAVOURITES, sameFavourite, type Favourite } from '.
 
 export interface ToolbarProps {
   state: EngineState;
+  /** A sketch in a typed note: one page, so no page commands. */
+  block?: boolean;
   favourites: Favourite[];
   onTool: (t: InkTool) => void;
   onColour: (c: string) => void;
@@ -115,12 +117,16 @@ export function InkToolbar(p: ToolbarProps) {
             </IconButton>
           }
         >
-          <MenuItem textValue="Add a page" onAction={p.onAddPage}>
-            <FilePlus2 size={15} aria-hidden /> Add a page
-          </MenuItem>
-          <MenuItem textValue="Pages" onAction={p.onPages}>
-            <Files size={15} aria-hidden /> Pages…
-          </MenuItem>
+          {!p.block && (
+            <MenuItem textValue="Add a page" onAction={p.onAddPage}>
+              <FilePlus2 size={15} aria-hidden /> Add a page
+            </MenuItem>
+          )}
+          {!p.block && (
+            <MenuItem textValue="Pages" onAction={p.onPages}>
+              <Files size={15} aria-hidden /> Pages…
+            </MenuItem>
+          )}
           <MenuItem textValue="Paper" onAction={p.onPaper}>
             <NotebookText size={15} aria-hidden /> Paper…
           </MenuItem>

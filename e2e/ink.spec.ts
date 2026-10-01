@@ -284,3 +284,51 @@ test.describe('ink notes', () => {
     expect(scroll).toBeLessThanOrEqual(client);
   });
 });
+
+test.describe('sketch blocks in notes', () => {
+  test.skip(({ browserName, isMobile }) => browserName !== 'chromium' || isMobile, 'pen input via CDP');
+
+  test('/sketch adds a drawing to a note; it previews, saves and reopens', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('notedoco:installGuideDismissed', 'true'));
+    await page.goto('/#/new/note');
+    const editor = page.getByRole('textbox', { name: 'Note', exact: true });
+    await expect(editor).toBeFocused();
+    await page.keyboard.type('Diagram');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('/sketch');
+    await expect(page.getByRole('option', { name: /Sketch/ })).toBeVisible();
+    await page.keyboard.press('Enter');
+
+    const dialog = page.getByRole('dialog', { name: 'Sketch' });
+    const canvas = dialog.getByTestId('ink-canvas');
+    await expect(canvas).toBeVisible();
+    await expect(dialog.getByText(/Page 1 of/)).toHaveCount(0); // one page, no page controls
+    const box = (await canvas.boundingBox())!;
+    const cdp = await page.context().newCDPSession(page);
+    await penStroke(cdp, wave(box.x + box.width / 2 - 90, box.y + 80, 30));
+    await expect.poll(() => inkedPixels(page)).toBeGreaterThan(100);
+    await dialog.getByRole('button', { name: 'Done' }).click();
+    await expect(dialog).toHaveCount(0);
+
+    // The note shows the drawing, and keeps it in its Markdown.
+    const preview = page.getByRole('button', { name: 'Sketch. Press to draw.' });
+    await expect(preview).toBeVisible();
+    const previewInk = () =>
+      page.evaluate(() => {
+        const c = document.querySelector('.note-sketch canvas') as HTMLCanvasElement | null;
+        if (!c || !c.width) return 0;
+        const d = c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data;
+        let n = 0;
+        for (let i = 0; i < d.length; i += 4) if (d[i]! < 100 && d[i + 3]! > 0) n++;
+        return n;
+      });
+    await expect.poll(previewInk).toBeGreaterThan(20);
+    await expect(page.getByText('Saved', { exact: false })).toBeVisible();
+
+    await page.reload();
+    await expect.poll(previewInk).toBeGreaterThan(20);
+    await page.getByRole('button', { name: 'Sketch. Press to draw.' }).click();
+    await expect(page.getByRole('dialog', { name: 'Sketch' })).toBeVisible();
+    await expect.poll(() => inkedPixels(page)).toBeGreaterThan(100);
+  });
+});

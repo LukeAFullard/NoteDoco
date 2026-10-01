@@ -30,18 +30,24 @@ export async function createInkBody(itemId: Id, paper: Paper = DEFAULT_PAPER): P
 
 export const inkPreview = pagePreview;
 
+/** An ink note's document (typed notes can also own sketch documents; those are 'block'). */
 export async function docFor(itemId: Id): Promise<InkDoc | undefined> {
-  return db.inkDocs.where('itemId').equals(itemId).first();
+  const docs = await db.inkDocs.where('itemId').equals(itemId).toArray();
+  return docs.find((d) => d.layout === 'pages');
 }
 
 export async function listPages(docId: Id): Promise<InkPage[]> {
   return (await db.inkPages.where('docId').equals(docId).toArray()).sort((a, b) => compareOrder(a.order, b.order));
 }
 
-/** Everything needed to open an ink note. Creates a missing body (e.g. an item from a newer backup). */
-export async function loadInk(itemId: Id): Promise<InkContent> {
+/**
+ * Everything needed to open an ink note, or (with `docId`) a sketch in a typed note.
+ * Creates a missing body (e.g. an item from a newer backup).
+ */
+export async function loadInk(itemId: Id, docId?: Id): Promise<InkContent> {
   return db.transaction('rw', [db.inkDocs, db.inkPages, db.strokes, db.inkElements], async () => {
-    const doc = (await docFor(itemId)) ?? (await createInkBody(itemId));
+    const doc = docId ? await db.inkDocs.get(docId) : ((await docFor(itemId)) ?? (await createInkBody(itemId)));
+    if (!doc) throw new Error('This sketch is no longer stored on this device.');
     const pages = await listPages(doc.id);
     if (!pages.length) {
       const page: InkPage = { id: newId(), docId: doc.id, order: orderBetween(null, null), paper: doc.paper, background: null };
@@ -72,6 +78,12 @@ export async function saveStrokes(itemId: Id, added: Stroke[], removedIds: Id[],
   });
 }
 
+/** The document some pages belong to (a sketch's), or the item's ink note document. */
+async function docOf(itemId: Id, pageIds?: Id[]): Promise<InkDoc | undefined> {
+  const page = pageIds?.[0] ? await db.inkPages.get(pageIds[0]) : undefined;
+  return page ? db.inkDocs.get(page.docId) : docFor(itemId);
+}
+
 /** Adds a page after `afterId` (or at the end), with the same paper as its neighbour. */
 export async function addPage(itemId: Id, afterId: Id | null = null, paper?: Paper): Promise<InkPage> {
   return db.transaction('rw', db.items, db.inkDocs, db.inkPages, async () => {
@@ -96,7 +108,7 @@ export async function addPage(itemId: Id, afterId: Id | null = null, paper?: Pap
 /** Changes the paper of some pages (all of them when `pageIds` is omitted) and the default for new pages. */
 export async function setPaper(itemId: Id, paper: Paper, pageIds?: Id[]) {
   await db.transaction('rw', db.items, db.inkDocs, db.inkPages, async () => {
-    const doc = await docFor(itemId);
+    const doc = await docOf(itemId, pageIds);
     if (!doc) return;
     const pages = await listPages(doc.id);
     for (const p of pages) if (!pageIds || pageIds.includes(p.id)) await db.inkPages.put({ ...p, paper });
@@ -233,18 +245,63 @@ export async function removePage(itemId: Id, pageId: Id) {
 }
 
 /** The current paper of each page (to undo a paper change). */
-export async function paperOf(itemId: Id): Promise<{ doc: Paper; pages: Record<Id, Paper> } | null> {
-  const doc = await docFor(itemId);
+export async function paperOf(itemId: Id, pageIds?: Id[]): Promise<{ doc: Paper; pages: Record<Id, Paper> } | null> {
+  const doc = await docOf(itemId, pageIds);
   if (!doc) return null;
   return { doc: doc.paper, pages: Object.fromEntries((await listPages(doc.id)).map((p) => [p.id, p.paper])) };
 }
 
 export async function restorePaper(itemId: Id, saved: { doc: Paper; pages: Record<Id, Paper> }) {
   await db.transaction('rw', db.items, db.inkDocs, db.inkPages, async () => {
-    const doc = await docFor(itemId);
+    const doc = await docOf(itemId, Object.keys(saved.pages));
     if (!doc) return;
     await db.inkDocs.put({ ...doc, paper: saved.doc });
     for (const [id, paper] of Object.entries(saved.pages)) await db.inkPages.update(id, { paper });
     await touchItem(itemId);
   });
+}
+
+// ---- Sketch blocks in typed notes (NOTE-8) ----------------------------------------
+
+/** Sketches are written in a note's Markdown as an image: ![sketch](ndoco:ink/<doc id>). */
+export const SKETCH_SCHEME = 'ndoco:ink/';
+export const sketchUrl = (docId: Id) => `${SKETCH_SCHEME}${docId}`;
+export const sketchIdFromUrl = (url: string): Id | null => (url.startsWith(SKETCH_SCHEME) ? url.slice(SKETCH_SCHEME.length) : null);
+export const SKETCH_PAPER: Paper = { size: 'endless', template: 'blank', colour: 'white' };
+
+/** A new, empty sketch owned by a typed note. Returns its document id. */
+export async function createSketch(itemId: Id): Promise<Id> {
+  return db.transaction('rw', db.inkDocs, db.inkPages, async () => {
+    const doc: InkDoc = { id: newId(), itemId, layout: 'block', paper: SKETCH_PAPER };
+    await db.inkDocs.add(doc);
+    await db.inkPages.add({ id: newId(), docId: doc.id, order: orderBetween(null, null), paper: SKETCH_PAPER, background: null });
+    return doc.id;
+  });
+}
+
+/**
+ * Copies the sketches a note's text refers to into another note (Duplicate) and returns the
+ * text pointing at the copies.
+ */
+export async function copySketches(toItemId: Id, text: string): Promise<string> {
+  const ids = [...new Set([...text.matchAll(/ndoco:ink\/([0-9a-f-]+)/g)].map((m) => m[1]!))];
+  let out = text;
+  for (const id of ids) {
+    const src = await db.inkDocs.get(id);
+    if (!src) continue;
+    const copyId = newId();
+    await db.transaction('rw', [db.inkDocs, db.inkPages, db.strokes, db.inkElements], async () => {
+      await db.inkDocs.add({ ...src, id: copyId, itemId: toItemId });
+      for (const p of await listPages(src.id)) {
+        const pageId = newId();
+        await db.inkPages.add({ ...p, id: pageId, docId: copyId });
+        const strokes = (await db.strokes.where('pageId').equals(p.id).toArray()).sort((a, b) => (a.id < b.id ? -1 : 1));
+        await db.strokes.bulkAdd(strokes.map((st) => ({ ...st, id: newId(), pageId })));
+        const els = await db.inkElements.where('pageId').equals(p.id).toArray();
+        await db.inkElements.bulkAdd(els.map((e) => ({ ...e, id: newId(), pageId })));
+      }
+    });
+    out = out.split(sketchUrl(id)).join(sketchUrl(copyId));
+  }
+  return out;
 }

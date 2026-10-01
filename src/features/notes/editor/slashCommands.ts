@@ -16,6 +16,9 @@ const today = () => {
 /** Asks the note editor to open the image picker (the editor owns the file input). */
 export const INSERT_IMAGE_EVENT = 'notedoco:insert-image';
 
+/** Asks the note editor to add a sketch block (it knows which note to attach it to). */
+export const INSERT_SKETCH_EVENT = 'notedoco:insert-sketch';
+
 export const SLASH_COMMANDS: SlashCommand[] = [
   { title: 'Heading 1', hint: '#', keywords: ['h1', 'title'], run: (e, r) => e.chain().focus().deleteRange(r).setNode('heading', { level: 1 }).run() },
   { title: 'Heading 2', hint: '##', keywords: ['h2', 'subtitle'], run: (e, r) => e.chain().focus().deleteRange(r).setNode('heading', { level: 2 }).run() },
@@ -39,6 +42,15 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     run: (e, r) => {
       e.chain().focus().deleteRange(r).run();
       window.dispatchEvent(new CustomEvent(INSERT_IMAGE_EVENT));
+    },
+  },
+  {
+    title: 'Sketch',
+    hint: 'draw with a pen',
+    keywords: ['draw', 'ink', 'handwriting', 'pen', 'diagram'],
+    run: (e, r) => {
+      e.chain().focus().deleteRange(r).run();
+      window.dispatchEvent(new CustomEvent(INSERT_SKETCH_EVENT, { detail: { editor: e } }));
     },
   },
   { title: 'Today’s date', hint: '@date', keywords: ['date', 'today', 'now'], run: (e, r) => e.chain().focus().deleteRange(r).insertContent(`@${today()} `).run() },

@@ -93,8 +93,21 @@ function TitleField({ item }: { item: Item }) {
   );
 }
 
-/** A handwritten note (P3.5): pages of ink, saved as you write. */
+/** A handwritten note (P3.5): its title and pages of ink, saved as you write. */
 export function InkEditor({ item }: { item: Item }) {
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <TitleField item={item} />
+      <InkSurface itemId={item.id} />
+    </div>
+  );
+}
+
+/**
+ * The ink editor itself: toolbar, pages and dialogs. Opens an ink note's pages, or with
+ * `docId` and `block` a sketch inside a typed note (NOTE-8).
+ */
+export function InkSurface({ itemId, docId: sketchId, block = false }: { itemId: string; docId?: string; block?: boolean }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [engine, setEngine] = useState<InkEngine | null>(null);
   const [docId, setDocId] = useState<string | null>(null);
@@ -109,8 +122,7 @@ export function InkEditor({ item }: { item: Item }) {
   const known = useRef(new Set<string>());
   const scrollTo = useRef<string | null>(null);
   const adding = useRef(false);
-  const save = useStrokeSaver(item.id);
-  const itemId = item.id;
+  const save = useStrokeSaver(itemId);
   const say = (msg: string) => setAnnouncement(msg);
   // Tapping away from a text box being edited only finishes it; it doesn't start another.
   const setEditing = useCallback((d: DraftText | null) => {
@@ -166,7 +178,7 @@ export function InkEditor({ item }: { item: Item }) {
   useEffect(() => {
     let live = true;
     let created: InkEngine | null = null;
-    loadInk(itemId)
+    loadInk(itemId, sketchId)
       .then(({ doc, pages, strokes, elements }) => {
         const host = hostRef.current;
         if (!live || !host) return;
@@ -175,10 +187,11 @@ export function InkEditor({ item }: { item: Item }) {
           pages,
           strokes: strokes.map(fromStored),
           elements,
+          block,
           onState: setState,
           onPlaceText: placeText,
           onChange: save,
-          onNearEnd: () => void appendPage(true),
+          onNearEnd: block ? undefined : () => void appendPage(true),
           onSnap: (kind) => setAnnouncement(`Snapped to ${kind === 'arrow' || kind === 'ellipse' ? 'an' : 'a'} ${kind}. Undo to keep it as drawn.`),
         });
         created.tool = p.tool;
@@ -197,7 +210,7 @@ export function InkEditor({ item }: { item: Item }) {
       created?.destroy();
       setEngine(null);
     };
-  }, [itemId, save, appendPage, placeText]);
+  }, [itemId, sketchId, block, save, appendPage, placeText]);
 
   // Pages come from storage, so undo from a toast, the page sorter and other panes all show up.
   const pages = useLiveQuery(() => (docId ? listPages(docId) : undefined), [docId]);
@@ -347,11 +360,11 @@ export function InkEditor({ item }: { item: Item }) {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col" onKeyDown={onKeyDown} onPaste={onPaste} onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
-      <TitleField item={item} />
+    <div className="flex h-full min-h-0 flex-1 flex-col" onKeyDown={onKeyDown} onPaste={onPaste} onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
       {engine && state && (
         <InkToolbar
           state={state}
+          block={block}
           favourites={favourites}
           onTool={setTool}
           onColour={setColour}
@@ -402,13 +415,15 @@ export function InkEditor({ item }: { item: Item }) {
         )}
         {engine && state && (
           <div className="absolute right-2 bottom-2 flex items-center gap-0.5 rounded-panel border border-border bg-surface/95 p-0.5 text-sm shadow">
-            <button
-              type="button"
-              className="rounded px-2 py-1.5 text-muted outline-none hover:text-text focus-visible:ring-2 focus-visible:ring-focus"
-              onClick={() => setDialog('pages')}
-            >
-              Page {state.page + 1} of {state.pageCount}
-            </button>
+            {!block && (
+              <button
+                type="button"
+                className="rounded px-2 py-1.5 text-muted outline-none hover:text-text focus-visible:ring-2 focus-visible:ring-focus"
+                onClick={() => setDialog('pages')}
+              >
+                Page {state.page + 1} of {state.pageCount}
+              </button>
+            )}
             <IconButton label="Zoom out" size="sm" onPress={() => engine.zoomBy(0.8)}>
               <Minus size={16} />
             </IconButton>
@@ -462,12 +477,12 @@ export function InkEditor({ item }: { item: Item }) {
           }}
         />
       )}
-      {engine && dialog === 'paper' && <PaperDialogFor engine={engine} itemId={itemId} onClose={() => setDialog(null)} />}
+      {engine && dialog === 'paper' && <PaperDialogFor engine={engine} itemId={itemId} block={block} onClose={() => setDialog(null)} />}
     </div>
   );
 }
 
-function PaperDialogFor({ engine, itemId, onClose }: { engine: InkEngine; itemId: string; onClose: () => void }) {
+function PaperDialogFor({ engine, itemId, block, onClose }: { engine: InkEngine; itemId: string; block: boolean; onClose: () => void }) {
   const [page] = useState(() => engine.currentPage());
-  return page ? <PaperDialog itemId={itemId} page={page} onClose={onClose} /> : null;
+  return page ? <PaperDialog itemId={itemId} page={page} block={block} onClose={onClose} /> : null;
 }

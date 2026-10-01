@@ -195,3 +195,30 @@ describe('text boxes and images', () => {
     expect(await db.attachments.count()).toBe(0);
   });
 });
+
+describe('sketch blocks in typed notes', () => {
+  it('creates, loads, copies on duplicate and purges sketches', async () => {
+    const { createSketch, sketchUrl, sketchIdFromUrl } = await import('./repos/ink');
+    const { setBodyText } = await import('./repos/items');
+    const note = await createItem({ kind: 'note', text: 'Plan' });
+    const docId = await createSketch(note);
+    await setBodyText(note, `Plan\n\n![sketch](${sketchUrl(docId)})`);
+    const sketch = await loadInk(note, docId);
+    expect(sketch.doc.layout).toBe('block');
+    expect(sketch.pages[0]!.paper.size).toBe('endless');
+    await saveStrokes(note, [stroke(sketch.pages[0]!.id)], []);
+
+    const copy = await duplicateItem(note);
+    const text = (await db.noteBodies.get(copy))!.text;
+    const copyDoc = sketchIdFromUrl(/\((ndoco:ink\/[^)]+)\)/.exec(text)![1]!)!;
+    expect(copyDoc).not.toBe(docId);
+    const copied = await loadInk(copy, copyDoc);
+    expect(copied.doc.itemId).toBe(copy);
+    expect(copied.strokes).toHaveLength(1);
+
+    await deleteItemsForever([note, copy]);
+    expect(await db.inkDocs.count()).toBe(0);
+    expect(await db.strokes.count()).toBe(0);
+    await expect(loadInk(note, docId)).rejects.toThrow(/no longer stored/);
+  });
+});

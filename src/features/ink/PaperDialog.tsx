@@ -43,7 +43,7 @@ function Group<T extends string>({ label, value, onChange, options, preview }: {
 }
 
 /** Paper size, template and colour for this page or every page (INK-8). */
-export function PaperDialog({ itemId, page, onClose }: { itemId: string; page: PageBox; onClose: () => void }) {
+export function PaperDialog({ itemId, page, block, onClose }: { itemId: string; page: PageBox; block?: boolean; onClose: () => void }) {
   const [paper, setPaper] = useState<Paper>(page.paper);
   const [scope, setScope] = useState<'page' | 'all'>('all');
   const previews = useMemo(() => {
@@ -55,29 +55,31 @@ export function PaperDialog({ itemId, page, onClose }: { itemId: string; page: P
     return out;
   }, [paper]);
   const apply = async () => {
-    toastWithUndo(await setPaperWithUndo(itemId, paper, scope === 'page' ? [page.id] : undefined));
+    toastWithUndo(await setPaperWithUndo(itemId, paper, scope === 'page' || block ? [page.id] : undefined));
     onClose();
   };
   return (
     <Dialog isOpen onOpenChange={(o) => !o && onClose()} title="Paper">
       <div className="flex flex-col gap-4 p-5">
         <Group label="Template" value={paper.template} onChange={(template) => setPaper({ ...paper, template })} options={TEMPLATES} preview={(t) => previews[t]} />
-        <Group label="Size" value={paper.size === 'infinite' ? 'endless' : paper.size} onChange={(size) => setPaper({ ...paper, size })} options={SIZES} />
+        {!block && <Group label="Size" value={paper.size === 'infinite' ? 'endless' : paper.size} onChange={(size) => setPaper({ ...paper, size })} options={SIZES} />}
         <Group
           label="Colour"
           value={paper.colour}
           onChange={(colour) => setPaper({ ...paper, colour })}
           options={(Object.keys(PAPER_COLOUR_LABELS) as Paper['colour'][]).map((c) => [c, PAPER_COLOUR_LABELS[c]])}
         />
-        <Group
-          label="Use for"
-          value={scope}
-          onChange={setScope}
-          options={[
-            ['all', 'All pages (and new ones)'],
-            ['page', 'This page only'],
-          ]}
-        />
+        {!block && (
+          <Group
+            label="Use for"
+            value={scope}
+            onChange={setScope}
+            options={[
+              ['all', 'All pages (and new ones)'],
+              ['page', 'This page only'],
+            ]}
+          />
+        )}
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onPress={onClose}>
             Cancel

@@ -313,7 +313,7 @@ export async function duplicatePageWithUndo(itemId: Id, pageId: Id): Promise<{ l
 }
 
 export async function setPaperWithUndo(itemId: Id, paper: Paper, pageIds?: Id[]): Promise<string> {
-  const before = await ink.paperOf(itemId);
+  const before = await ink.paperOf(itemId, pageIds);
   await ink.setPaper(itemId, paper, pageIds);
   if (before) recordUndo({ label: 'Change paper', undo: () => ink.restorePaper(itemId, before), redo: () => ink.setPaper(itemId, paper, pageIds) });
   return 'Paper changed';

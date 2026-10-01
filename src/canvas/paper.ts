@@ -14,6 +14,8 @@ export const PAGE_SIZES = {
 export const PAGE_GAP = 32;
 /** An endless page is A4-wide and always this much taller than its lowest stroke. */
 export const ENDLESS_ROOM = 900;
+/** A sketch block in a typed note (NOTE-8) is one endless page that starts short. */
+export const BLOCK_SIZE = { minHeight: 420, room: 240 };
 
 export const DEFAULT_PAPER: Paper = { size: 'a4', template: 'blank', colour: 'white' };
 
@@ -30,12 +32,16 @@ export interface PageBox {
  * Lays pages out top to bottom. `contentBottom` gives, per page id, the lowest point written
  * on it (page coordinates), which sizes endless pages.
  */
-export function layoutPages(pages: Array<{ id: string; paper: Paper }>, contentBottom: (id: string) => number = () => 0): PageBox[] {
+export function layoutPages(
+  pages: Array<{ id: string; paper: Paper }>,
+  contentBottom: (id: string) => number = () => 0,
+  endless: { minHeight: number; room: number } = { minHeight: PAGE_SIZES.a4.h, room: ENDLESS_ROOM },
+): PageBox[] {
   let y = 0;
   return pages.map((p) => {
     const fixed = p.paper.size === 'a4' || p.paper.size === 'letter' ? PAGE_SIZES[p.paper.size] : null;
     const w = fixed?.w ?? PAGE_SIZES.a4.w;
-    const h = fixed?.h ?? Math.max(PAGE_SIZES.a4.h, Math.ceil(contentBottom(p.id) + ENDLESS_ROOM));
+    const h = fixed?.h ?? Math.max(endless.minHeight, Math.ceil(contentBottom(p.id) + endless.room));
     const box = { id: p.id, x: -w / 2, y, w, h, paper: p.paper };
     y += h + PAGE_GAP;
     return box;

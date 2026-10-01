@@ -6,7 +6,7 @@ import { nowIso } from '@/lib/ids';
 import type { ColourKey } from '@/lib/palette';
 import { analyseText } from '@/lib/textInfo';
 import { taskRefsFor } from '../taskRefs';
-import { copyInk, createInkBody, deleteInkBodies, inkPreview, strokeCount } from './ink';
+import { copyInk, copySketches, createInkBody, deleteInkBodies, inkPreview, strokeCount } from './ink';
 
 export const TRASH_RETENTION_DAYS = 30;
 
@@ -159,6 +159,8 @@ export async function duplicateItem(id: Id): Promise<Id> {
     size: sticky?.size,
   });
   if (it.kind === 'ink') await copyInk(id, copyId);
+  // Sketches in a typed note are copied too, so the copy can be edited on its own.
+  if (note?.text.includes('ndoco:ink/')) await setBodyText(copyId, await copySketches(copyId, note.text));
   await db.transaction('rw', db.items, async () => {
     const copy = (await db.items.get(copyId))!;
     const sibs = await listItems(it.groupId);

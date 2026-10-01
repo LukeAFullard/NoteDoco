@@ -259,6 +259,35 @@
   .note-content img.ProseMirror-selectednode {
     outline: 2px solid var(--color-focus);
   }
+  /* Sketch blocks (NOTE-8): a live preview on its paper; press to draw. */
+  .note-content .note-sketch {
+    margin: 0.75em 0;
+  }
+  .note-content .note-sketch-button {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-panel);
+    overflow: hidden;
+    cursor: pointer;
+    background: var(--color-surface);
+  }
+  .note-content .note-sketch-button:focus-visible,
+  .note-content .note-sketch.ProseMirror-selectednode .note-sketch-button {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+  .note-content .note-sketch canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+  .note-content .note-sketch-hint {
+    margin-top: 0.25em;
+    font-size: 0.8em;
+    color: var(--color-muted);
+  }
   .note-content table {
     border-collapse: collapse;
     width: 100%;
