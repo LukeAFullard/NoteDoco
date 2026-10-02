@@ -1,7 +1,7 @@
 import { db } from '../db';
 import { touched } from '../meta';
 import type { Id, InkDoc, InkElement, InkPage, Paper, Stroke } from '../types';
-import { newId } from '@/lib/ids';
+import { newId, nowIso } from '@/lib/ids';
 import { compareOrder, orderBetween } from '@/lib/order';
 import { DEFAULT_PAPER } from '@/canvas/paper';
 
@@ -36,8 +36,9 @@ export async function docFor(itemId: Id): Promise<InkDoc | undefined> {
   return docs.find((d) => d.layout === 'pages');
 }
 
+/** A document's pages in order, leaving out deleted ones. */
 export async function listPages(docId: Id): Promise<InkPage[]> {
-  return (await db.inkPages.where('docId').equals(docId).toArray()).sort((a, b) => compareOrder(a.order, b.order));
+  return (await db.inkPages.where('docId').equals(docId).toArray()).filter((p) => !p.deletedAt).sort((a, b) => compareOrder(a.order, b.order));
 }
 
 /**
@@ -150,7 +151,7 @@ export async function copyInk(fromItemId: Id, toItemId: Id) {
 export async function strokeCount(itemId: Id): Promise<number> {
   const doc = await docFor(itemId);
   if (!doc) return 0;
-  const pages = await db.inkPages.where('docId').equals(doc.id).primaryKeys();
+  const pages = (await listPages(doc.id)).map((p) => p.id);
   return (await db.strokes.where('pageId').anyOf(pages).count()) + (await db.inkElements.where('pageId').anyOf(pages).count());
 }
 
@@ -173,28 +174,43 @@ export interface PageSnapshot {
   elements: InkElement[];
 }
 
-/** Deletes a page and its strokes. A note always keeps at least one page. */
+/**
+ * Deletes a page. Like items in the Trash, it's only marked deleted (with its ink kept), so
+ * it can be brought back even after the Undo toast has gone; it's purged with the Trash.
+ * A note always keeps at least one page.
+ */
 export async function deletePage(itemId: Id, pageId: Id): Promise<PageSnapshot | null> {
   return db.transaction('rw', [db.items, db.inkDocs, db.inkPages, db.strokes, db.inkElements], async () => {
     const page = await db.inkPages.get(pageId);
-    if (!page || (await db.inkPages.where('docId').equals(page.docId).count()) < 2) return null;
-    const strokes = await db.strokes.where('pageId').equals(pageId).toArray();
-    const elements = await db.inkElements.where('pageId').equals(pageId).toArray();
-    await db.strokes.where('pageId').equals(pageId).delete();
-    await db.inkElements.where('pageId').equals(pageId).delete();
-    await db.inkPages.delete(pageId);
-    await touchItem(itemId, { preview: pagePreview(await db.inkPages.where('docId').equals(page.docId).count()) });
-    return { itemId, page, strokes, elements };
+    if (!page || page.deletedAt) return null;
+    const live = await listPages(page.docId);
+    if (live.length < 2) return null;
+    await db.inkPages.put({ ...page, deletedAt: nowIso() });
+    await touchItem(itemId, { preview: pagePreview(live.length - 1) });
+    return { itemId, page: { ...page, deletedAt: null }, strokes: [], elements: [] };
   });
 }
 
+/** Brings back a deleted page, or re-adds one removed by an undo (with its strokes). */
 export async function restorePage(snap: PageSnapshot) {
   await db.transaction('rw', [db.items, db.inkPages, db.strokes, db.inkElements], async () => {
-    await db.inkPages.put(snap.page);
-    await db.strokes.bulkPut(snap.strokes);
-    await db.inkElements.bulkPut(snap.elements);
-    await touchItem(snap.itemId, { preview: pagePreview(await db.inkPages.where('docId').equals(snap.page.docId).count()) });
+    await db.inkPages.put({ ...snap.page, deletedAt: null });
+    if (snap.strokes.length) await db.strokes.bulkPut(snap.strokes);
+    if (snap.elements.length) await db.inkElements.bulkPut(snap.elements);
+    await touchItem(snap.itemId, { preview: pagePreview((await listPages(snap.page.docId)).length) });
   });
+}
+
+/** Permanently removes pages deleted before `cutoff` (all deleted pages when omitted). Only purging the Trash calls this. */
+export async function purgeDeletedPages(cutoff?: string): Promise<number> {
+  const old = (await db.inkPages.toArray()).filter((p) => p.deletedAt && (!cutoff || p.deletedAt <= cutoff)).map((p) => p.id);
+  if (!old.length) return 0;
+  await db.transaction('rw', db.inkPages, db.strokes, db.inkElements, async () => {
+    await db.strokes.where('pageId').anyOf(old).delete();
+    await db.inkElements.where('pageId').anyOf(old).delete();
+    await db.inkPages.bulkDelete(old);
+  });
+  return old.length;
 }
 
 /** Moves a page before `beforeId` (null = to the end). Returns its old order key. */
@@ -240,7 +256,7 @@ export async function removePage(itemId: Id, pageId: Id) {
     await db.strokes.where('pageId').equals(pageId).delete();
     await db.inkElements.where('pageId').equals(pageId).delete();
     await db.inkPages.delete(pageId);
-    await touchItem(itemId, { preview: pagePreview(await db.inkPages.where('docId').equals(page.docId).count()) });
+    await touchItem(itemId, { preview: pagePreview((await listPages(page.docId)).length) });
   });
 }
 
@@ -284,21 +300,29 @@ export async function createSketch(itemId: Id): Promise<Id> {
  * text pointing at the copies.
  */
 export async function copySketches(toItemId: Id, text: string): Promise<string> {
+  const copyPicture = async (attachmentId: Id | null) => {
+    const att = attachmentId ? await db.attachments.get(attachmentId) : undefined;
+    if (!att) return attachmentId;
+    const id = newId();
+    await db.attachments.add({ ...att, id, itemId: toItemId });
+    return id;
+  };
   const ids = [...new Set([...text.matchAll(/ndoco:ink\/([0-9a-f-]+)/g)].map((m) => m[1]!))];
   let out = text;
   for (const id of ids) {
     const src = await db.inkDocs.get(id);
     if (!src) continue;
     const copyId = newId();
-    await db.transaction('rw', [db.inkDocs, db.inkPages, db.strokes, db.inkElements], async () => {
+    await db.transaction('rw', [db.inkDocs, db.inkPages, db.strokes, db.inkElements, db.attachments], async () => {
       await db.inkDocs.add({ ...src, id: copyId, itemId: toItemId });
       for (const p of await listPages(src.id)) {
         const pageId = newId();
         await db.inkPages.add({ ...p, id: pageId, docId: copyId });
         const strokes = (await db.strokes.where('pageId').equals(p.id).toArray()).sort((a, b) => (a.id < b.id ? -1 : 1));
         await db.strokes.bulkAdd(strokes.map((st) => ({ ...st, id: newId(), pageId })));
-        const els = await db.inkElements.where('pageId').equals(p.id).toArray();
-        await db.inkElements.bulkAdd(els.map((e) => ({ ...e, id: newId(), pageId })));
+        for (const e of await db.inkElements.where('pageId').equals(p.id).toArray()) {
+          await db.inkElements.add({ ...e, id: newId(), pageId, attachmentId: await copyPicture(e.attachmentId) });
+        }
       }
     });
     out = out.split(sketchUrl(id)).join(sketchUrl(copyId));

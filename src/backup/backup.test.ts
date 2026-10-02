@@ -52,3 +52,27 @@ it('merges: keeps whichever copy of each item was edited last, adds what is miss
 it('rejects files that are not NoteDoco backups', async () => {
   await expect(readBackup(new Blob(['not a zip']))).rejects.toBeInstanceOf(BackupError);
 });
+
+it('merges ink as a whole with its item: erased strokes stay erased, deleted notes come back whole', async () => {
+  const { createItem } = await import('@/data/repos/items');
+  const { loadInk, saveStrokes } = await import('@/data/repos/ink');
+  const { encodePoints } = await import('@/canvas/points');
+  const ink = await createItem({ kind: 'ink' });
+  const page = (await loadInk(ink)).pages[0]!;
+  const stroke = (id: string) => ({ id, pageId: page.id, tool: 'ballpoint' as const, colour: 'black', size: 1, opacity: 1, points: encodePoints([{ x: 1, y: 1, p: 0.5, t: 0 }]), bbox: [0, 0, 2, 2] as [number, number, number, number], createdAt: '' });
+  await saveStrokes(ink, [stroke('s1'), stroke('s2')], []);
+  const zip = await readBackup(await createBackup());
+
+  // Erase a stroke after the backup: merging the older backup must not bring it back.
+  await new Promise((r) => setTimeout(r, 5));
+  await saveStrokes(ink, [], ['s1']);
+  await restoreBackup(zip, 'merge');
+  expect((await loadInk(ink)).strokes.map((s) => s.id)).toEqual(['s2']);
+
+  // Delete the note entirely: merging restores it with all its ink.
+  const { deleteItemsForever } = await import('@/data/repos/items');
+  await deleteItemsForever([ink]);
+  await restoreBackup(zip, 'merge');
+  expect((await loadInk(ink)).strokes.map((s) => s.id).sort()).toEqual(['s1', 's2']);
+  expect(await db.inkPages.count()).toBe(1);
+});

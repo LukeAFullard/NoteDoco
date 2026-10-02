@@ -115,12 +115,15 @@ export function transformStroke(s: InkStroke, m: Matrix, pageId = s.pageId): Ink
 /** The area covered by some strokes. */
 export function boundsOfStrokes(strokes: readonly InkStroke[]): Rect | null {
   if (!strokes.length) return null;
-  return {
-    minX: Math.min(...strokes.map((s) => s.bbox[0])),
-    minY: Math.min(...strokes.map((s) => s.bbox[1])),
-    maxX: Math.max(...strokes.map((s) => s.bbox[2])),
-    maxY: Math.max(...strokes.map((s) => s.bbox[3])),
-  };
+  // A loop, not Math.min(...list): spreading a very full page would overflow the call stack.
+  const r = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+  for (const { bbox } of strokes) {
+    if (bbox[0] < r.minX) r.minX = bbox[0];
+    if (bbox[1] < r.minY) r.minY = bbox[1];
+    if (bbox[2] > r.maxX) r.maxX = bbox[2];
+    if (bbox[3] > r.maxY) r.maxY = bbox[3];
+  }
+  return r;
 }
 
 const invert = (c: StrokeChange): StrokeChange => ({ added: c.removed, removed: c.added, addedEls: c.removedEls, removedEls: c.addedEls });

@@ -119,11 +119,12 @@ describe('ink pages with undo', () => {
 
     expect(await deletePageWithUndo(id, p2.id)).toBe('Page deleted');
     expect(await order()).toEqual([p1.id]);
-    expect(await db.strokes.count()).toBe(0);
+    expect((await loadInk(id)).strokes).toHaveLength(0);
+    expect(await db.strokes.count()).toBe(2); // kept, like the Trash, until purged
     expect(await deletePageWithUndo(id, p1.id)).toBeNull(); // the last page stays
     await undo();
     expect(await order()).toEqual([p1.id, p2.id]);
-    expect(await db.strokes.count()).toBe(2);
+    expect((await loadInk(id)).strokes).toHaveLength(2);
 
     await movePageWithUndo(id, p2.id, p1.id);
     expect(await order()).toEqual([p2.id, p1.id]);
@@ -184,9 +185,9 @@ describe('text boxes and images', () => {
     const second = await addPage(id);
     await saveStrokes(id, [], [], [element(second.id)]);
     await deletePageWithUndo(id, second.id);
-    expect(await db.inkElements.where('pageId').equals(second.id).count()).toBe(0);
+    expect((await loadInk(id)).elements.filter((e) => e.pageId === second.id)).toHaveLength(0);
     await undo();
-    expect(await db.inkElements.where('pageId').equals(second.id).count()).toBe(1);
+    expect((await loadInk(id)).elements.filter((e) => e.pageId === second.id)).toHaveLength(1);
 
     await saveStrokes(id, [], [], [], [text.id]);
     expect((await loadInk(id)).elements.filter((e) => e.pageId === page.id).map((e) => e.kind)).toEqual(['image']);
@@ -220,5 +221,54 @@ describe('sketch blocks in typed notes', () => {
     expect(await db.inkDocs.count()).toBe(0);
     expect(await db.strokes.count()).toBe(0);
     await expect(loadInk(note, docId)).rejects.toThrow(/no longer stored/);
+  });
+});
+
+describe('deleted pages', () => {
+  it('are kept for the Trash period with their ink, then purged', async () => {
+    const { deletePageWithUndo } = await import('./actions');
+    const { purgeTrash, emptyTrash } = await import('./repos/items');
+    const id = await createItem({ kind: 'ink' });
+    const keep = await addPage(id);
+    const gone = (await loadInk(id)).pages[0]!;
+    await saveStrokes(id, [stroke(gone.id), stroke(keep.id)], []);
+    await deletePageWithUndo(id, gone.id);
+    expect((await db.items.get(id))!.preview).toBe('Handwritten · 1 page');
+
+    await purgeTrash(30, new Date()); // deleted today: kept
+    expect(await db.inkPages.get(gone.id)).toBeDefined();
+    await purgeTrash(30, new Date(Date.now() + 31 * 86_400_000)); // a month on: gone
+    expect(await db.inkPages.get(gone.id)).toBeUndefined();
+    expect(await db.strokes.count()).toBe(1);
+
+    await deletePageWithUndo(id, (await addPage(id)).id);
+    await emptyTrash();
+    expect((await db.inkPages.toArray()).filter((p) => p.deletedAt)).toHaveLength(0);
+  });
+});
+
+describe('duplicating a typed note', () => {
+  it('gives the copy its own pictures, in the text and in its sketches', async () => {
+    const { addAttachment, attachmentUrl } = await import('./repos/attachments');
+    const { createSketch, sketchUrl, sketchIdFromUrl } = await import('./repos/ink');
+    const { setBodyText, emptyTrash, trashItems } = await import('./repos/items');
+    const note = await createItem({ kind: 'note', text: 'x' });
+    const pic = await addAttachment(note, new Blob(['png'], { type: 'image/png' }), 'a.png');
+    const sketch = await createSketch(note);
+    const sketchPage = (await loadInk(note, sketch)).pages[0]!;
+    const inSketch = await addAttachment(note, new Blob(['jpg'], { type: 'image/jpeg' }), 'b.jpg');
+    await saveStrokes(note, [], [], [{ id: newId(), pageId: sketchPage.id, kind: 'image', x: 0, y: 0, w: 10, h: 10, text: '', fontSize: 18, colour: 'black', attachmentId: inSketch.id, createdAt: '' }]);
+    await setBodyText(note, `Plan\n\n![a](${attachmentUrl(pic.id)})\n\n![sketch](${sketchUrl(sketch)})`);
+
+    const copy = await duplicateItem(note);
+    await trashItems([note]);
+    await emptyTrash(); // the original and its pictures are gone for good
+
+    const text = (await db.noteBodies.get(copy))!.text;
+    const picId = /ndoco:attachment\/([0-9a-f-]+)/.exec(text)![1]!;
+    expect((await db.attachments.get(picId))!.itemId).toBe(copy);
+    const copySketch = sketchIdFromUrl(/\((ndoco:ink\/[^)]+)\)/.exec(text)![1]!)!;
+    const el = (await loadInk(copy, copySketch)).elements[0]!;
+    expect((await db.attachments.get(el.attachmentId!))!.itemId).toBe(copy);
   });
 });

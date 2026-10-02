@@ -4,6 +4,7 @@ import { taskRefsFor } from '@/data/taskRefs';
 import type { Attachment, Meta } from '@/data/types';
 import { setSetting } from '@/data/repos/settings';
 import { blobBytes } from '@/lib/blob';
+import { deleteInkBodies } from '@/data/repos/ink';
 
 /**
  * Full backup (SAFE-6): one .zip with a manifest, every table as JSON, and attachments as
@@ -115,6 +116,28 @@ export async function readBackup(file: Blob): Promise<ReadBackup> {
 
 /** Body-like tables are keyed by their item; they follow the item's merge decision. */
 const FOLLOWS_ITEM: Partial<Record<TableName, string>> = { noteBodies: 'itemId', stickyBodies: 'itemId', boards: 'itemId' };
+/** Ink content has no edit times of its own: it follows its item (inkDocs.itemId), as a whole. */
+const INK_TABLES = new Set<TableName>(['inkDocs', 'inkPages', 'strokes', 'inkElements']);
+
+/**
+ * Merge for ink: for each item whose backup copy won, its ink (an ink note's pages, a typed
+ * note's sketches) is replaced by the backup's, so strokes erased since don't come back and
+ * strokes from two versions are never mixed.
+ */
+async function mergeInk(backup: ReadBackup, acceptedItems: Set<string>) {
+  const rows = <T,>(name: TableName) => (backup.tables[name] ?? []) as T[];
+  const docs = rows<{ id: string; itemId: string | null }>('inkDocs').filter((d) => d.itemId && acceptedItems.has(d.itemId));
+  const owners = [...new Set(docs.map((d) => d.itemId!))];
+  if (!owners.length) return;
+  await deleteInkBodies(owners);
+  const docIds = new Set(docs.map((d) => d.id));
+  const pages = rows<{ id: string; docId: string }>('inkPages').filter((p) => docIds.has(p.docId));
+  const pageIds = new Set(pages.map((p) => p.id));
+  await db.inkDocs.bulkPut(docs as never[]);
+  await db.inkPages.bulkPut(pages as never[]);
+  await db.strokes.bulkPut(rows<{ pageId: string }>('strokes').filter((s) => pageIds.has(s.pageId)) as never[]);
+  await db.inkElements.bulkPut(rows<{ pageId: string }>('inkElements').filter((e) => pageIds.has(e.pageId)) as never[]);
+}
 
 /** Derived from bodies, so rebuilt after a restore rather than trusted (older backups lack them). */
 async function rebuildTaskRefs(itemIds: string[] | null) {
@@ -143,7 +166,7 @@ export async function restoreBackup(backup: ReadBackup, mode: 'replace' | 'merge
     // Merge: records with updatedAt keep whichever copy was edited last; others are added if missing.
     const acceptedItems = new Set<string>();
     for (const name of TABLES) {
-      if (FOLLOWS_ITEM[name] || name === 'taskRefs') continue;
+      if (FOLLOWS_ITEM[name] || name === 'taskRefs' || INK_TABLES.has(name)) continue;
       const table = db.table(name);
       for (const row of (backup.tables[name] ?? []) as Array<Record<string, unknown>>) {
         const key = table.schema.primKey.keyPath;
@@ -161,6 +184,7 @@ export async function restoreBackup(backup: ReadBackup, mode: 'replace' | 'merge
       const rows = ((backup.tables[name] ?? []) as Array<Record<string, unknown>>).filter((r) => acceptedItems.has(r[field] as string));
       await db.table(name).bulkPut(rows);
     }
+    await mergeInk(backup, acceptedItems);
     await rebuildTaskRefs([...acceptedItems]);
   });
   return { added, updated };

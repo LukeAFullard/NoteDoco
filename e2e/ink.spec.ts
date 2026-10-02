@@ -260,6 +260,63 @@ test.describe('ink notes', () => {
     await expect(card.locator('img')).toBeVisible();
   });
 
+  test('a pause mid-stroke does not freeze it: writing on after a snap keeps the ink as drawn', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'pen');
+    const canvas = await openNewInkNote(page);
+    const box = (await canvas.boundingBox())!;
+    const cdp = await page.context().newCDPSession(page);
+    const send = (type: string, x: number, y: number, force: number, buttons = 1) =>
+      cdp.send('Input.dispatchMouseEvent', { type, x, y, button: 'left', buttons, clickCount: 1, pointerType: 'pen', force } as never);
+    const x0 = box.x + box.width / 2 - 150;
+    const y = box.y + 150;
+    await send('mousePressed', x0, y, 0.6);
+    for (let i = 1; i <= 20; i++) await send('mouseMoved', x0 + i * 6, y, 0.6); // a straight line…
+    await page.waitForTimeout(800); // …held long enough to snap…
+    await send('mouseMoved', x0 + 120, y, 0.6);
+    for (let i = 1; i <= 20; i++) await send('mouseMoved', x0 + 120 + i * 6, y + 60 + Math.sin(i) * 20, 0.6); // …then on it goes
+    await send('mouseReleased', x0 + 240, y + 60, 0, 0);
+    await expect.poll(() => canvas.getAttribute('data-strokes')).toBe('1');
+    await expect(page.getByRole('status')).not.toContainText('Snapped');
+    // The part written after the pause is there.
+    const below = await page.evaluate(([x, yy]) => {
+      const c = document.querySelector('canvas[data-layer="dry"]') as HTMLCanvasElement;
+      const r = c.getBoundingClientRect();
+      const s = c.width / r.width;
+      const d = c.getContext('2d')!.getImageData(Math.round((x! - r.left) * s), Math.round((yy! - r.top) * s), Math.round(120 * s), Math.round(50 * s)).data;
+      let n = 0;
+      for (let i = 3; i < d.length; i += 4) if (d[i]! > 0) n++;
+      return n;
+    }, [x0 + 120, y + 35]);
+    expect(below).toBeGreaterThan(50);
+  });
+
+  test('keyboard: turn and resize a selection; pressure off gives even lines', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'pen');
+    await page.addInitScript(() => localStorage.setItem('notedoco:ink.settings', JSON.stringify({ pressure: 'off' })));
+    const canvas = await openNewInkNote(page);
+    const box = (await canvas.boundingBox())!;
+    const cdp = await page.context().newCDPSession(page);
+    const line = (y: number) => Array.from({ length: 20 }, (_, i) => [box.x + box.width / 2 - 100 + i * 10, box.y + y] as [number, number]);
+    await penStroke(cdp, line(100), 0.1);
+    const light = await inkedPixels(page);
+    await penStroke(cdp, line(200), 0.95);
+    const both = await inkedPixels(page);
+    // Same width whatever the pressure (within anti-aliasing).
+    expect(Math.abs(both - light - light)).toBeLessThan(light * 0.15);
+
+    await canvas.focus();
+    await page.keyboard.press('Control+a');
+    await expect(page.getByRole('toolbar', { name: 'Selected ink' })).toContainText('2 selected');
+    await page.keyboard.press('.');
+    await expect.poll(() => inkedPixels(page)).toBeGreaterThan(both * 1.05);
+    await page.keyboard.press(']');
+    await expect(page.getByRole('status')).toContainText('Turned right');
+    expect(await canvas.getAttribute('data-strokes')).toBe('2');
+    await page.keyboard.press('Control+z');
+    await page.keyboard.press('Control+z');
+    await expect.poll(() => inkedPixels(page)).toBe(both);
+  });
+
   test('pages: sorter deletes with undo; paper changes to lined', async ({ page, isMobile }) => {
     test.skip(isMobile, 'pen');
     const canvas = await openNewInkNote(page);
