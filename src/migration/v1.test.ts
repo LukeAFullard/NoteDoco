@@ -106,3 +106,28 @@ it('never modifies the v1 database', async () => {
   expect(v1.notes.map((n) => n.title).sort()).toEqual(['Groceries', 'Kick-off']);
   expect(v1.projects).toHaveLength(2);
 });
+
+it('never brings back what was deleted for good in v2, but still picks up new v1 notes', async () => {
+  const { trashItems, emptyTrash } = await import('@/data/repos/items');
+  await makeV1(fixture);
+  await migrateFromV1();
+  await trashItems(['n-2']);
+  await emptyTrash();
+  await db.attachments.delete('a-1');
+  await makeV1({ notes: [...fixture.notes, { id: 'n-4', projectId: null, title: 'New', contentMarkdown: 'new in v1', goalDate: null, archived: false, createdAt: T, updatedAt: '2030-01-01T00:00:00.000Z' }] });
+  const again = await migrateFromV1();
+  expect(await db.items.get('n-2')).toBeUndefined();
+  expect(await db.attachments.get('a-1')).toBeUndefined();
+  expect(await db.items.get('n-4')).toBeDefined();
+  expect(again).toMatchObject({ notes: 1, attachments: 0 });
+});
+
+it('installs from before the seen list existed: what was there at the last run stays deleted', async () => {
+  await makeV1(fixture);
+  await migrateFromV1();
+  await db.settings.delete('migration:v1:seen'); // as an older install left it (no list)
+  await db.items.delete('n-1');
+  await db.noteBodies.delete('n-1');
+  await migrateFromV1();
+  expect(await db.items.get('n-1')).toBeUndefined();
+});

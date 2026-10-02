@@ -2,7 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 import { App } from './app/App';
-import { openStorage } from './data/health';
+import { openStorage, watchStorageErrors } from './data/health';
 import { purgeTrash } from './data/repos/items';
 import { applyTheme, useTheme } from './app/theme';
 import { applyPrefs } from './app/prefs';
@@ -10,6 +10,7 @@ import { showToast } from './design/toast';
 
 applyTheme(useTheme.getState().theme);
 applyPrefs();
+watchStorageErrors();
 
 void openStorage().then(async (s) => {
   if (s.status !== 'ok') return;

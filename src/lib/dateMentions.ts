@@ -26,8 +26,9 @@ const WEEKDAY_WORDS: [RegExp, number][] = [
 export function shorthandDate(word: string, now = new Date()): LocalDate | null {
   const w = word.toLowerCase();
   const today = todayLocal(now);
-  if (w === 'today' || w === 'tod') return today;
-  if (w === 'tomorrow' || w === 'tmrw' || w === 'tom') return addDays(today, 1);
+  // No "tom" or "tod": they're names (@tom means Tom, not tomorrow).
+  if (w === 'today') return today;
+  if (w === 'tomorrow' || w === 'tmrw') return addDays(today, 1);
   if (w === 'yesterday') return addDays(today, -1);
   if (w === 'nextweek' || w === 'next-week') return addDays(today, 7 - ((weekday(today) + 6) % 7)); // next Monday
   for (const [re, day] of WEEKDAY_WORDS) {

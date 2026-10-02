@@ -7,6 +7,7 @@ import { HIGHLIGHTER_COLOUR_KEYS } from '@/canvas/inkColours';
 import { addAttachment } from '@/data/repos/attachments';
 import { newId, nowIso } from '@/lib/ids';
 import { db } from '@/data/db';
+import { reportStorageError } from '@/data/health';
 import { addPage, listPages, loadInk, saveStrokes } from '@/data/repos/ink';
 import { updateItem } from '@/data/repos/items';
 import type { InkElement, Item } from '@/data/types';
@@ -77,6 +78,7 @@ function useStrokeSaver(itemId: string, onSaved: () => void) {
         .then(() => saveStrokes(itemId, c.added.map(toStored), c.removed.map((s) => s.id), c.addedEls, c.removedEls?.map((e) => e.id)))
         .catch((err: unknown) => {
           console.error(err);
+          reportStorageError(err);
           showToast({ message: 'Your latest ink couldn’t be saved. Check that storage isn’t full, then keep writing.', tone: 'danger' }, 0);
         });
       void queue.current.then(() => saved.current());

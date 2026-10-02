@@ -52,3 +52,9 @@ it('lists checklist lines by date, and overdue items', async () => {
   await createItem({ kind: 'note', text: 'Diary', when: allDaySpan(addDays(today, -1)) });
   expect((await overdueItems()).map((i) => i.id)).toEqual([late, todo]);
 });
+
+it('shows a project that started months before the window and is still running', async () => {
+  const project = await createItem({ kind: 'note', text: 'Thesis', when: allDaySpan(addDays(today, -200), addDays(today, 60)) });
+  const placed = await placedBetween(today, addDays(today, 6));
+  expect(placed.map((p) => p.item.id)).toContain(project);
+});

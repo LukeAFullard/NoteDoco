@@ -120,7 +120,10 @@ export async function restoreGroup(id: Id): Promise<void> {
     // If the parent is gone, restore to the top level rather than leaving an orphan.
     if (root.parentId) {
       const parent = await db.groups.get(root.parentId);
-      if (!parent || parent.deletedAt) await db.groups.update(id, { parentId: null });
+      if (!parent || parent.deletedAt) {
+        const g = await db.groups.get(id);
+        if (g) await db.groups.put(touched(g, { parentId: null }));
+      }
     }
   });
 }

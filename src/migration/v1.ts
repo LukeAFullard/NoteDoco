@@ -10,8 +10,9 @@ import type { ColourKey } from '@/lib/palette';
 
 /**
  * Brings data over from NoteDoco v1 (P1.10, decision 0002). v1's database is only ever read.
- * Safe to run on every start: it adds v1 records that aren't in v2 yet (by id), so notes
- * written in v1 during the preview period come across too, and nothing is duplicated.
+ * Safe to run on every start: it adds v1 records it hasn't brought over before, so notes
+ * written in v1 later come across too, nothing is duplicated, and a note deleted for good in
+ * v2 stays deleted (the ids it has seen are recorded in the `migration:v1:seen` setting).
  */
 export const V1_DB_NAME = 'note-doco-db';
 
@@ -37,6 +38,8 @@ export interface MigrationReport {
   attachments: number;
   at: string;
 }
+
+const SEEN_KEY = 'migration:v1:seen';
 
 const COLOURS: Record<V1Project['color'], ColourKey> = { signal: 'apricot', verdigris: 'mint', rust: 'coral', graphite: 'slate' };
 const RRULE: Record<string, string> = { daily: 'FREQ=DAILY', weekly: 'FREQ=WEEKLY', monthly: 'FREQ=MONTHLY' };
@@ -95,6 +98,13 @@ export async function migrateFromV1(): Promise<MigrationReport> {
   if (!v1) return report;
   report.found = true;
   const me = deviceId();
+  // What earlier runs brought over. Installs from before this was recorded fall back to the
+  // last run's time: anything v1 had then was brought over then, so if it's missing now, it
+  // was deleted in v2 and must not come back.
+  const recorded = await getSetting<string[] | null>(SEEN_KEY, null);
+  const seen = new Set(recorded ?? []);
+  const lastRun = recorded ? null : ((await getSetting<MigrationReport | null>('migration:v1', null))?.at ?? null);
+  const done = (id: string, time: string) => seen.has(id) || (lastRun !== null && time <= lastRun);
 
   await db.transaction('rw', [db.groups, db.items, db.noteBodies, db.taskRefs, db.versions, db.attachments, db.settings], async () => {
     // Groups: keep v1 ids; order siblings by creation time.
@@ -105,7 +115,7 @@ export async function migrateFromV1(): Promise<MigrationReport> {
     const lastOrder = (orders: string[]) => orders.sort(compareOrder).at(-1) ?? null;
     const byParent = new Map<string | null, V1Project[]>();
     for (const p of projects) {
-      if (existingGroups.has(p.id)) continue;
+      if (existingGroups.has(p.id) || done(p.id, p.updatedAt)) continue;
       byParent.set(p.parentId ?? null, [...(byParent.get(p.parentId ?? null) ?? []), p]);
     }
     for (const [parentId, siblings] of byParent) {
@@ -128,7 +138,7 @@ export async function migrateFromV1(): Promise<MigrationReport> {
     const attByNote = new Map<string, V1Attachment[]>();
     for (const a of v1.attachments) attByNote.set(a.noteId, [...(attByNote.get(a.noteId) ?? []), a]);
     const knownGroups = new Set([...existingGroups, ...v1.projects.map((p) => p.id)]);
-    const newNotes = [...v1.notes].filter((n) => !existingItems.has(n.id)).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    const newNotes = [...v1.notes].filter((n) => !existingItems.has(n.id) && !done(n.id, n.updatedAt)).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     const notesByGroup = new Map<string | null, V1Note[]>();
     for (const n of newNotes) {
       const g = n.projectId && knownGroups.has(n.projectId) ? n.projectId : null;
@@ -161,7 +171,7 @@ export async function migrateFromV1(): Promise<MigrationReport> {
 
     const existingVersions = new Set(await db.versions.toCollection().primaryKeys());
     for (const v of v1.noteVersions) {
-      if (existingVersions.has(v.id)) continue;
+      if (existingVersions.has(v.id) || done(v.id, v.savedAt)) continue;
       const row: Version = { id: v.id, itemId: v.noteId, createdAt: v.savedAt, reason: 'migration', snapshot: encodeVersion({ title: v.title, format: 'markdown', text: v.contentMarkdown }) };
       await db.versions.add(row);
       report.versions++;
@@ -169,7 +179,7 @@ export async function migrateFromV1(): Promise<MigrationReport> {
 
     const existingAtt = new Set(await db.attachments.toCollection().primaryKeys());
     for (const a of v1.attachments) {
-      if (existingAtt.has(a.id)) continue;
+      if (existingAtt.has(a.id) || done(a.id, a.createdAt)) continue;
       const row: Attachment = { id: a.id, itemId: a.noteId, name: a.filename, mime: a.mimeType, size: a.size, sha256: '', blob: a.blob, createdAt: a.createdAt };
       await db.attachments.add(row);
       report.attachments++;
@@ -178,6 +188,8 @@ export async function migrateFromV1(): Promise<MigrationReport> {
     const s = v1.settings.find((x) => x.id === 'app-settings');
     if (s?.lastBackupDate && !(await getSetting<string | null>('lastBackupAt', null))) await setSetting('lastBackupAt', s.lastBackupDate);
     await setSetting('migration:v1', report);
+    const all = [...v1.projects, ...v1.notes, ...v1.noteVersions, ...v1.attachments].map((r) => r.id);
+    await setSetting(SEEN_KEY, [...new Set([...seen, ...all])]);
   });
   return report;
 }

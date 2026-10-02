@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import type { Editor } from '@tiptap/core';
 import { CalendarClock, Code2, History, Maximize2, Minimize2, Search, Type } from 'lucide-react';
 import { db } from '@/data/db';
+import { reportStorageError } from '@/data/health';
 import { setBodyText } from '@/data/repos/items';
 import { addAttachment, attachmentIdFromUrl, objectUrlFor } from '@/data/repos/attachments';
 import type { Item, NoteBody } from '@/data/types';
@@ -27,7 +29,7 @@ import { HistoryDialog } from './HistoryDialog';
 import { OPEN_HISTORY_EVENT } from '@/features/items/events';
 
 type Mode = 'rich' | 'source';
-type SaveState = 'saved' | 'saving';
+type SaveState = 'saved' | 'saving' | 'failed';
 
 async function insertImages(editor: Editor, itemId: string, files: File[], pos?: number) {
   for (const f of files) {
@@ -178,19 +180,43 @@ export function NoteEditor({ item }: { item: Item }) {
   const focusMode = useUi((s) => s.focusMode);
   const isActive = useIsActivePane();
   const latest = useRef<string | null>(null);
+  /** The text as this editor last loaded or saved it. */
+  const savedText = useRef<string | null>(null);
 
-  // Load the body once per note. Later changes come from this editor, so we don't live-reload
-  // (that would fight with typing).
+  // Load the body once per note; later changes normally come from this editor.
   useEffect(() => {
     let cancelled = false;
-    void db.noteBodies.get(item.id).then((b) => !cancelled && setBody(b ?? { itemId: item.id, format: 'markdown', text: '' }));
+    void db.noteBodies.get(item.id).then((b) => {
+      if (cancelled) return;
+      savedText.current = b?.text ?? '';
+      setBody(b ?? { itemId: item.id, format: 'markdown', text: '' });
+    });
     return () => {
       cancelled = true;
     };
   }, [item.id]);
 
+  // Changed somewhere else (a checklist line ticked in Today, another pane, a repeat moving
+  // on): reload, unless there are edits here still waiting to save, so they never overwrite it.
+  const stored = useLiveQuery(() => db.noteBodies.get(item.id), [item.id]);
+  useEffect(() => {
+    if (!stored || savedText.current === null || stored.text === savedText.current || saveState !== 'saved') return;
+    savedText.current = stored.text;
+    latest.current = null;
+    setBody(stored);
+    setReloadKey((k) => k + 1);
+  }, [stored, saveState]);
+
   const { schedule, flush } = useDebouncedSave(async (text: string) => {
-    await setBodyText(item.id, text);
+    try {
+      savedText.current = text;
+      await setBodyText(item.id, text);
+    } catch (err) {
+      // The text stays in the editor; the next change tries again. The banner says why.
+      setSaveState('failed');
+      reportStorageError(err);
+      return;
+    }
     setSaveState('saved');
     // A version every few minutes while editing (history, SAFE-5).
     await snapshotNote(item.id, 'idle', SNAPSHOT_INTERVAL_MS);
@@ -207,7 +233,10 @@ export function NoteEditor({ item }: { item: Item }) {
   /** After restoring a version, reload the editor with the restored text. */
   const reloadFromDb = async () => {
     const b = await db.noteBodies.get(item.id);
-    if (b) setBody(b);
+    if (b) {
+      savedText.current = b.text;
+      setBody(b);
+    }
     latest.current = null;
     setReloadKey((k) => k + 1);
     setHistoryOpen(false);
@@ -232,6 +261,7 @@ export function NoteEditor({ item }: { item: Item }) {
   const setFormat = async (format: NoteBody['format']) => {
     await flush();
     const text = latest.current ?? body?.text ?? '';
+    savedText.current = text;
     await setBodyText(item.id, text, format);
     setBody({ itemId: item.id, format, text });
     setMode('rich');
@@ -269,7 +299,7 @@ export function NoteEditor({ item }: { item: Item }) {
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex items-center gap-1 border-b border-border px-3 py-1.5 text-xs text-muted">
         <span aria-live="polite" className="mr-auto font-mono">
-          {saveState === 'saving' ? 'Saving…' : 'Saved'} · {item.stats.words} {item.stats.words === 1 ? 'word' : 'words'}
+          {saveState === 'saving' ? 'Saving…' : saveState === 'failed' ? 'Not saved' : 'Saved'} · {item.stats.words} {item.stats.words === 1 ? 'word' : 'words'}
         </span>
         {!plain && mode === 'rich' && (
           <IconButton label="Find and replace (Ctrl+F)" size="sm" onPress={() => setFindOpen(!findOpen)}>
