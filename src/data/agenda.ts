@@ -28,8 +28,11 @@ export interface Placed {
 /** A stable key for an entry (an item can appear several times: repeats, checklist lines). */
 export const placedKey = (p: Placed) => (p.line ? `line:${p.line.id}` : `${p.item.id}@${p.span.start}`);
 
-/** How far back to look for long spans that started before the window. */
-const LOOKBACK_DAYS = 62;
+/**
+ * How far back to look for long spans that started before the window (a project running for
+ * months must still show in this week). Two years covers anything realistic.
+ */
+const LOOKBACK_DAYS = 731;
 
 const live = (i: Item, includeArchived: boolean) => !i.deletedAt && (includeArchived || !i.archived);
 

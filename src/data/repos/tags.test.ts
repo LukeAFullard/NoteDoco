@@ -29,3 +29,18 @@ it('renames tags in text and picker tags, merging into an existing tag, and undo
   expect((await db.noteBodies.get(a))!.text).toBe('Plan #Work');
   expect((await db.items.get(b))!.manualTags).toEqual(['client', 'work']);
 });
+
+it('redo does not add a second undo step, and checklist lines follow the new tag', async () => {
+  const { createItem } = await import('./items');
+  const { undo, redo, useUndo } = await import('../undo');
+  const { db } = await import('../db');
+  const id = await createItem({ kind: 'note', text: 'Plan\n- [ ] ring #work @2026-10-02' });
+  await renameTag('work', 'job');
+  expect((await db.taskRefs.where('itemId').equals(id).first())!.text).toContain('#job');
+  const steps = useUndo.getState().past.length;
+  await undo();
+  expect((await db.taskRefs.where('itemId').equals(id).first())!.text).toContain('#work');
+  await redo();
+  expect(useUndo.getState().past.length).toBe(steps);
+  expect((await db.taskRefs.where('itemId').equals(id).first())!.text).toContain('#job');
+});

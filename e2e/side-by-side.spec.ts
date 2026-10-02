@@ -73,3 +73,36 @@ test.describe('side by side', () => {
     await expect(inspector.getByText('Words')).toBeVisible();
   });
 });
+
+test.describe('a note open beside another view', () => {
+  test.skip(({ isMobile }) => isMobile, 'wide screens');
+  test.use({ viewport: { width: 1400, height: 900 } });
+
+  test('ticking its checklist elsewhere shows in the note, and typing there keeps the tick', async ({ page }) => {
+    await page.goto('/#/new/note');
+    const editor = page.getByRole('textbox', { name: 'Note', exact: true });
+    await expect(editor).toBeFocused();
+    await page.keyboard.type('Plan');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('[ ] call Sam');
+    await expect(page.getByText('Saved', { exact: false })).toBeVisible();
+
+    // Tasks beside the note: tick the line there.
+    await page.getByRole('button', { name: 'Open this beside (split view)' }).click();
+    const side = page.locator('[data-pane-id]:not([data-pane-id="main"])');
+    await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Tasks' }).click({ modifiers: ['Shift'] });
+    await expect(side.getByRole('heading', { level: 1 })).toHaveText('Tasks');
+    await side.getByRole('checkbox', { name: 'call Sam' }).click();
+
+    // The note in the main pane shows the tick; typing more there doesn't undo it.
+    const main = page.locator('[data-pane-id="main"]');
+    const box = main.locator('ul[data-type="taskList"] input[type="checkbox"]');
+    await expect(box).toBeChecked();
+    await main.getByRole('textbox', { name: 'Note', exact: true }).click();
+    await page.keyboard.press('Control+End');
+    await page.keyboard.type(' today');
+    await expect(main.getByText('Saved', { exact: false })).toBeVisible();
+    await page.reload();
+    await expect(page.locator('[data-pane-id="main"] ul[data-type="taskList"] input[type="checkbox"]')).toBeChecked();
+  });
+});

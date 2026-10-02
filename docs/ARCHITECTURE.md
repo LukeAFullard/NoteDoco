@@ -189,11 +189,12 @@ Items with no date simply don't appear in the date indexes. That's what we want.
 
 - **Database:** Dexie over IndexedDB, named `notedoco`. The v1 database (`note-doco-db`) is read during migration and otherwise left untouched.
 - **Shared origin.** GitHub Pages serves every project site of an account from one origin (`<user>.github.io`). They all share IndexedDB, `localStorage`, the storage quota and the persistence grant. So: use unique database names, prefix every `localStorage` key, and keep the service-worker scope at `/NoteDoco/`. A custom domain would isolate the app completely.
-- **If storage fails, say so.** Show a blocking banner with backup/export options. Never fall back silently to memory (v1's failure mode).
+- **If storage fails, say so.** Show a blocking banner with backup/export options. Never fall back silently to memory (v1's failure mode). That covers saves failing later too (the device filling up, the browser closing the database): `reportStorageError` in `data/health.ts` shows the banner, and a global `unhandledrejection` listener catches saves nothing else handled. The note editor shows "Not saved" and tries again on the next change.
 - **Blobs** (images, PDFs, audio later) are stored as `Blob`s in IndexedDB. Thumbnails are generated as WebP in a worker. Consider OPFS for large media later; v2.0 doesn't need it.
 - **Persistent storage.** Call `navigator.storage.persist()` after the user has created real content, not on first load, with a short explanation. Show `navigator.storage.estimate()` as a meter in Settings.
 - **iOS Safari** deletes script-written data for sites without user interaction in 7 days of browser use. Home Screen web apps are the documented exemption. Persistent storage protects against deletion when the device runs low on space, but WebKit doesn't clearly say it lifts the 7-day rule, so we don't rely on it. On iOS the app shows a gentle, dismissible "Add to Home Screen to keep your notes safe" guide, and backup reminders stay on by default.
 - **Crash safety.** Editors write through a debounced save (≤ 500 ms) and flush on `visibilitychange`/`pagehide`. Ink commits each stroke on pointer-up.
+- **Changes from elsewhere.** The note editor watches its note's stored text: if it changes somewhere else (a checklist line ticked in Today, another pane) and this editor has nothing waiting to save, it reloads, so its next save never writes over that change.
 - **Multiple tabs.** Live queries propagate changes across tabs. `BroadcastChannel` carries UI events; Web Locks guard exclusive jobs (migrations, backups, trash purge).
 - **Migrations.** Each Dexie version has an upgrade function and a test against fixture databases. An automatic backup is taken before any migration that rewrites data.
 
@@ -432,7 +433,7 @@ CI enforces what it can: a bundle-size check on every PR, and Playwright perform
 
 ## 18. Migration from v1
 
-> Live since M1 (27 Sep 2026, decision 0007): v2 is served at `/NoteDoco/`, where v1 was. The migration runs on every start (it only adds, and records v1 ids so nothing is added twice), so a device that last opened v1 months ago still gets its notes. Installed v1 apps update in place; `/NoteDoco/next/` redirects and retires the old preview's service worker (`public/next/`).
+> Live since M1 (27 Sep 2026, decision 0007): v2 is served at `/NoteDoco/`, where v1 was. The migration runs on every start. It only adds, and records the v1 ids it has brought over (`migration:v1:seen`), so nothing is added twice and a note deleted for good in v2 never comes back. A device that last opened v1 months ago still gets its notes. Installed v1 apps update in place; `/NoteDoco/next/` redirects and retires the old preview's service worker (`public/next/`).
 
 - On first run, open `note-doco-db` if it exists (the same GitHub Pages origin and path) and read every store.
 - **Mapping:**

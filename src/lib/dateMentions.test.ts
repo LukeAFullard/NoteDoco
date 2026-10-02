@@ -27,3 +27,8 @@ it('finds the first mention and strips mentions', () => {
   expect(firstMention('no date')).toBeNull();
   expect(stripMentions('book venue @2026-10-02 now')).toBe('book venue now');
 });
+
+it('leaves names that look like shorthand alone', () => {
+  const sat = new Date(2026, 8, 26);
+  expect(resolveDateMentions('ask @tom and @tod about it ', sat)).toBe('ask @tom and @tod about it ');
+});

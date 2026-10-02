@@ -461,7 +461,7 @@ No user-facing features yet. The goal is a solid base, and early answers to the 
 ### Phase 3 — Ink → Milestone M3 "writing feels great"
 
 > **Status (1 Oct 2026):** P3.1–P3.10 built and tested, except what needs real pen hardware:
-> - 215 unit tests and 57 end-to-end tests, including pen and touch input sent through the browser's DevTools protocol (pressure, the eraser, lasso, shape snapping, pinch, palm-sized touches);
+> - 221 unit tests and 58 end-to-end tests, including pen and touch input sent through the browser's DevTools protocol (pressure, the eraser, lasso, shape snapping, pinch, palm-sized touches);
 > - startup JavaScript 174 KB gzipped (the ink editor, sketch previews and the PDF exporter all load on first use);
 > - database version 3 adds `inkElements` (text boxes and images on pages).
 >

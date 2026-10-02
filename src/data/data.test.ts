@@ -169,3 +169,25 @@ describe('storage health', () => {
     expect((await openStorage()).status).toBe('ok');
   });
 });
+
+describe('failed saves', () => {
+  it('shows the storage banner for storage failures, not for ordinary errors', async () => {
+    const Dexie = (await import('dexie')).default;
+    const { isStorageFailure, reportStorageError } = await import('./health');
+    useStorageHealth.setState({ status: 'ok' });
+    expect(isStorageFailure(new Error('a bug'))).toBe(false);
+    expect(isStorageFailure(new Dexie.ConstraintError('duplicate key'))).toBe(false);
+    reportStorageError(new Error('a bug'));
+    expect(useStorageHealth.getState().status).toBe('ok');
+
+    const quota = new Dexie.AbortError('aborted', Object.assign(new Error('full'), { name: 'QuotaExceededError' }));
+    expect(isStorageFailure(quota)).toBe(true);
+    reportStorageError(quota);
+    const s = useStorageHealth.getState();
+    expect(s.status === 'failed' && s.message).toMatch(/out of space/);
+
+    useStorageHealth.setState({ status: 'ok' });
+    reportStorageError(new Dexie.DatabaseClosedError());
+    expect(useStorageHealth.getState().status).toBe('failed');
+  });
+});
