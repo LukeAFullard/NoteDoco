@@ -126,6 +126,11 @@ function ElementView({
     if (e.key === 'Enter' && el.kind === 'text') return void (handled(), onEdit());
     const n = nudge[e.key];
     if (n) return void (handled(), engine.updateElement({ ...el, x: el.x + n[0], y: el.y + n[1] }));
+    // Resize by keyboard (the corner handle needs a pointer); pictures keep their shape.
+    if (e.key === ',' || e.key === '.') {
+      const w = Math.max(MIN_W, Math.min(box.w, el.w * (e.key === ',' ? 0.9 : 1.1)));
+      return void (handled(), engine.updateElement({ ...el, w, h: el.kind === 'image' ? (el.h * w) / el.w : el.h }));
+    }
   };
 
   const handle = 22 / zoom;

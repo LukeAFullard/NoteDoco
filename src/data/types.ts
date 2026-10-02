@@ -111,6 +111,8 @@ export interface InkPage {
   order: OrderKey;
   paper: Paper;
   background: { attachmentId: Id; pdfPage: number } | null;
+  /** Set = deleted (kept, with its ink, for as long as the Trash keeps items). Absent = live. */
+  deletedAt?: Instant | null;
 }
 
 export interface Stroke {

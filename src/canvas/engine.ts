@@ -459,6 +459,23 @@ export class InkEngine {
     return true;
   }
 
+  /** Rotates (degrees) or scales the selection about its centre (keyboard, INK-6). */
+  turnSelection(degrees: number) {
+    const before = this.selected();
+    const b = boundsOfStrokes(before);
+    if (!b) return;
+    const m = rotateAbout((degrees * Math.PI) / 180, (b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2);
+    this.commitChange({ removed: before, added: before.map((s) => transformStroke(s, m)) });
+  }
+
+  scaleSelection(factor: number) {
+    const before = this.selected();
+    const b = boundsOfStrokes(before);
+    if (!b) return;
+    const m = scaleAbout(factor, (b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2);
+    this.commitChange({ removed: before, added: before.map((s) => transformStroke(s, m)) });
+  }
+
   /** Moves the selection by (dx, dy) page pixels (arrow keys). */
   nudgeSelection(dx: number, dy: number) {
     const before = this.selected();
@@ -589,7 +606,7 @@ export class InkEngine {
   }
 
   private toInkPoint(e: PointerEvent, page: PageBox, start: number): InkPoint {
-    const raw = normalisePressure(e.pointerType, e.pressure);
+    const raw = this.settings.pressure ? normalisePressure(e.pointerType, e.pressure) : null;
     const p = raw === null ? 0.5 : Math.pow(raw, this.settings.pressureGamma);
     return { ...this.toPagePt(e, page), p, t: Math.max(0, e.timeStamp - start) };
   }
@@ -667,7 +684,8 @@ export class InkEngine {
         page,
         points: [],
         predicted: [],
-        pressure: this.settings.pressure && normalisePressure(e.pointerType, e.pressure) !== null,
+        // With pressure off, a constant pressure gives even lines (not speed-based ones).
+        pressure: !this.settings.pressure || normalisePressure(e.pointerType, e.pressure) !== null,
         start: e.timeStamp,
         anchor: { x: e.clientX, y: e.clientY },
         hold: 0,
@@ -776,8 +794,10 @@ export class InkEngine {
   private addSamples(a: Active, events: PointerEvent[]) {
     for (const ev of events) {
       if (a.kind === 'ink') {
-        if (a.shape) continue; // snapped: the shape stays until the pen lifts
-        if (Math.hypot(ev.clientX - a.anchor.x, ev.clientY - a.anchor.y) > HOLD_SLOP) {
+        const moved = Math.hypot(ev.clientX - a.anchor.x, ev.clientY - a.anchor.y);
+        // Snapped, then kept writing (a pause mid-word): drop the shape and carry on as drawn.
+        if (a.shape && moved > HOLD_SLOP * 3) a.shape = null;
+        if (!a.shape && moved > HOLD_SLOP) {
           a.anchor = { x: ev.clientX, y: ev.clientY };
           this.armHold(a);
         }

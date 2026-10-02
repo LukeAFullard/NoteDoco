@@ -5,8 +5,9 @@ import { compareOrder, orderBetween } from '@/lib/order';
 import { newId, nowIso } from '@/lib/ids';
 import type { ColourKey } from '@/lib/palette';
 import { analyseText } from '@/lib/textInfo';
+import { copyAttachments } from './attachments';
 import { taskRefsFor } from '../taskRefs';
-import { copyInk, copySketches, createInkBody, deleteInkBodies, inkPreview, strokeCount } from './ink';
+import { copyInk, copySketches, createInkBody, deleteInkBodies, inkPreview, purgeDeletedPages, strokeCount } from './ink';
 
 export const TRASH_RETENTION_DAYS = 30;
 
@@ -162,8 +163,11 @@ export async function duplicateItem(id: Id): Promise<Id> {
   // The copy starts with the same thumbnail (its own copy of the picture).
   const thumb = it.thumbnailId ? await db.attachments.get(it.thumbnailId) : undefined;
   const thumbnailId = thumb ? (await db.attachments.add({ ...thumb, id: newId(), itemId: copyId })) : null;
-  // Sketches in a typed note are copied too, so the copy can be edited on its own.
-  if (note?.text.includes('ndoco:ink/')) await setBodyText(copyId, await copySketches(copyId, note.text));
+  // A typed note's pictures and sketches are copied too, so the copy stands on its own.
+  if (note) {
+    const text = await copySketches(copyId, await copyAttachments(copyId, note.text));
+    if (text !== note.text) await setBodyText(copyId, text);
+  }
   await db.transaction('rw', db.items, async () => {
     const copy = (await db.items.get(copyId))!;
     const sibs = await listItems(it.groupId);
@@ -231,6 +235,7 @@ export async function purgeTrash(days = TRASH_RETENTION_DAYS, now = new Date()):
   await deleteItemsForever(old);
   const oldGroups = await db.groups.where('deletedAt').between('', cutoff, false, true).primaryKeys();
   await db.groups.bulkDelete(oldGroups);
+  await purgeDeletedPages(cutoff);
   return old.length;
 }
 
@@ -239,6 +244,7 @@ export async function emptyTrash(): Promise<number> {
   const items = await db.items.where('deletedAt').above('').primaryKeys();
   await deleteItemsForever(items);
   await db.groups.where('deletedAt').above('').delete();
+  await purgeDeletedPages();
   return items.length;
 }
 

@@ -32,6 +32,23 @@ export async function addAttachment(itemId: Id, file: Blob, name = (file as File
 
 export const attachmentUrl = (id: Id) => `${ATTACHMENT_SCHEME}${id}`;
 
+/**
+ * Gives another item its own copies of the attachments a text links to, and returns the text
+ * pointing at the copies (Duplicate), so the copy keeps its pictures when the original is purged.
+ */
+export async function copyAttachments(toItemId: Id, text: string): Promise<string> {
+  const ids = [...new Set([...text.matchAll(/ndoco:attachment\/([0-9a-f-]+)/g)].map((m) => m[1]!))];
+  let out = text;
+  for (const id of ids) {
+    const att = await db.attachments.get(id);
+    if (!att) continue;
+    const copy = { ...att, id: newId(), itemId: toItemId, createdAt: nowIso() };
+    await db.attachments.add(copy);
+    out = out.split(attachmentUrl(id)).join(attachmentUrl(copy.id));
+  }
+  return out;
+}
+
 export function attachmentIdFromUrl(url: string): Id | null {
   return url.startsWith(ATTACHMENT_SCHEME) ? url.slice(ATTACHMENT_SCHEME.length) : null;
 }

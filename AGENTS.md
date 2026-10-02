@@ -51,6 +51,7 @@ Guidance for anyone (people or AI coding agents) changing this repository. Read 
 - **Focusing a new input after a tap:** the browser moves focus to the tapped element after `pointerdown`, so focus the new input on the next frame.
 - **Ink order is id order.** Stroke ids are UUIDv7, so sorting by id gives the stacking order. Pieces of a split stroke get `<id>~n` ids to keep their place; don't re-id strokes when changing them (move, recolour), or they jump to the top.
 - **pdf-lib mis-draws SVG's shorthand `T` curves:** give `drawSvgPath` explicit curves (`strokePath(…, true)`).
+- **Records without `updatedAt`** (ink pages, strokes, elements) can't be merged record by record: they follow their item (see `mergeInk` in `backup/backup.ts`). New tables like that need the same treatment.
 - **Ink e2e:** send pen and touch input through `e2e/support/pen.ts` (DevTools protocol). The canvas has `data-strokes` with the stroke count, and strokes must start on the page (pages are centred, so the canvas edges are often desk).
 
 ## Definition of done

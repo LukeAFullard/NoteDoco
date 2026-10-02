@@ -32,14 +32,23 @@ export async function loadExportDoc(itemId: string, docId?: string): Promise<Exp
   const item = await db.items.get(itemId);
   const byPage = <T extends { pageId: string }>(list: T[]) => {
     const m = new Map<string, T[]>();
-    for (const x of list) m.set(x.pageId, [...(m.get(x.pageId) ?? []), x]);
+    for (const x of list) {
+      const arr = m.get(x.pageId);
+      if (arr) arr.push(x);
+      else m.set(x.pageId, [x]);
+    }
     for (const v of m.values()) v.sort((a, b) => ((a as { id?: string }).id! < (b as { id?: string }).id! ? -1 : 1));
     return m;
   };
   const strokeMap = byPage(strokes.map(fromStored));
   const elementMap = byPage(elements);
   const block = doc.layout === 'block';
-  const bottom = (id: string) => Math.max(0, ...(strokeMap.get(id) ?? []).map((s) => s.bbox[3]), ...(elementMap.get(id) ?? []).map((e) => e.y + e.h));
+  const bottom = (id: string) => {
+    let b = 0;
+    for (const s of strokeMap.get(id) ?? []) b = Math.max(b, s.bbox[3]);
+    for (const e of elementMap.get(id) ?? []) b = Math.max(b, e.y + e.h);
+    return b;
+  };
   let boxes = layoutPages(pages, bottom, block ? BLOCK_SIZE : undefined);
   if (block) boxes = boxes.map((b) => ({ ...b, h: Math.min(b.h, Math.max(160, bottom(b.id) + 32)) }));
   const images = new Map<string, Blob>();

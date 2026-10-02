@@ -365,6 +365,9 @@ export function InkSurface({ itemId, docId: sketchId, block = false }: { itemId:
     if (e.target === hostRef.current) {
       const step = e.shiftKey ? 10 : 1;
       if (arrow && sel) return void (handled(), engine.nudgeSelection(arrow[0] * step, arrow[1] * step));
+      // Rotate and resize the selection by keyboard (the handles need a pointer).
+      if (sel && (e.key === '[' || e.key === ']')) return void (handled(), engine.turnSelection(e.key === '[' ? -15 : 15), say(e.key === '[' ? 'Turned left.' : 'Turned right.'));
+      if (sel && (e.key === ',' || e.key === '.')) return void (handled(), engine.scaleSelection(e.key === ',' ? 0.9 : 1.1), say(e.key === ',' ? 'Smaller.' : 'Bigger.'));
       if (arrow) return void (handled(), engine.panBy(-arrow[0] * PAN_STEP, -arrow[1] * PAN_STEP));
       const h = hostRef.current.clientHeight * 0.9;
       if (e.key === 'PageUp') return void (handled(), engine.panBy(0, h));
