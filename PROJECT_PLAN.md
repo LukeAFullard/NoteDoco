@@ -245,7 +245,7 @@ An item can appear on **many boards**; it is the same item, not a copy. The time
 | ID | Feature | When |
 |---|---|---|
 | FIND-1 | Instant, typo-tolerant search across titles, text, stickies, tags and attachment names | P1 |
-| FIND-2 | Filters: kind, group, tag, colour, date range, has ink, has image, open or done | P1 |
+| FIND-2 | Filters: kind, group, tag, colour, date range, has ink, has image, open or done, archived | P1 |
 | FIND-3 | Command palette (Ctrl/⌘-K): go anywhere, run any action | P1 |
 | FIND-4 | Recent items ("jump back in") | P1 |
 | FIND-5 | Backlinks and hover previews (with NOTE-10) | P5 |

@@ -10,7 +10,7 @@ import { useGroups } from '@/data/hooks';
 import { useCreate } from '@/features/capture/useCreate';
 import { KIND_ICONS, itemTitle } from '@/features/items/kinds';
 import { openSticky } from '@/features/stickies/stickyDialog';
-import { Highlight } from '@/features/search/SearchResults';
+import { ArchivedBadge, Highlight } from '@/features/search/SearchResults';
 import { useSearch } from '@/search/client';
 import { openNewGroup, useUi } from './ui';
 import { setTheme, useTheme } from './theme';
@@ -153,8 +153,11 @@ export function CommandPalette() {
                 <Command.Item key={h.id} value={`item-${h.id}`} onSelect={() => openItem(h.id, h.kind)} className={itemCls}>
                   <Icon size={16} className="shrink-0 text-muted" aria-hidden />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-text">
-                      <Highlight text={itemTitle(h.title, h.kind)} terms={h.terms} />
+                    <span className="flex items-baseline gap-2">
+                      <span className="truncate text-text">
+                        <Highlight text={itemTitle(h.title, h.kind)} terms={h.terms} />
+                      </span>
+                      {h.archived && <ArchivedBadge />}
                     </span>
                     {h.snippet && (
                       <span className="block truncate text-xs">

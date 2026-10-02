@@ -17,6 +17,7 @@ interface Doc {
   checklistTotal: number;
   checklistDone: number;
   updatedAt: string;
+  archived: boolean;
 }
 
 export interface SearchHit {
@@ -25,6 +26,8 @@ export interface SearchHit {
   kind: ItemKind;
   groupId: string | null;
   colour: string | null;
+  /** Archived itself, or in an archived group. */
+  archived: boolean;
   snippet: string;
   /** The words that actually matched (after typo and prefix matching), for highlighting. */
   terms: string[];
@@ -47,19 +50,25 @@ function snippetFor(text: string, terms: string[], length = 140): string {
   return (start > 0 ? '…' : '') + flat.slice(start, start + length) + (start + length < flat.length ? '…' : '');
 }
 
+/** How much an archived item's text score counts, so it ranks below live matches. */
+const ARCHIVED_BOOST = 0.3;
+
 /**
- * Full-text index over live items (FIND-1), kept in sync incrementally by comparing each
- * item's `rev`. Runs in a worker in the app and directly in tests.
+ * Full-text index over items not in the trash (FIND-1), kept in sync incrementally by
+ * comparing each item's `rev`. Archived items are found too, ranked lower and marked.
+ * Runs in a worker in the app and directly in tests.
  */
 export class SearchIndex {
   private mini = new MiniSearch<Doc>({
     fields: ['title', 'text', 'tags'],
-    storeFields: ['title', 'tagList', 'kind', 'groupId', 'colour', 'pinned', 'checklistTotal', 'checklistDone', 'updatedAt'],
+    storeFields: ['title', 'tagList', 'kind', 'groupId', 'colour', 'pinned', 'checklistTotal', 'checklistDone', 'updatedAt', 'archived'],
     searchOptions: { boost: { title: 3, tags: 2 }, prefix: true, fuzzy: 0.2, combineWith: 'AND' },
   });
   private revs = new Map<string, number>();
   private texts = new Map<string, string>();
   private groups: Group[] = [];
+  /** Groups that are archived, or inside an archived group. */
+  private archivedGroups = new Set<string>();
 
   constructor(private db: NoteDocoDB) {}
 
@@ -71,7 +80,11 @@ export class SearchIndex {
   async sync(): Promise<number> {
     const [items, groups] = await Promise.all([this.db.items.toArray(), this.db.groups.toArray()]);
     this.groups = groups.filter((g) => !g.deletedAt);
-    const live = new Map(items.filter((i) => !i.deletedAt && !i.archived).map((i) => [i.id, i]));
+    const byId = new Map(this.groups.map((g) => [g.id, g]));
+    const archivedUp = (g: Group | undefined, depth = 0): boolean =>
+      !!g && depth < 50 && (g.archived || archivedUp(g.parentId ? byId.get(g.parentId) : undefined, depth + 1));
+    this.archivedGroups = new Set(this.groups.filter((g) => archivedUp(g)).map((g) => g.id));
+    const live = new Map(items.filter((i) => !i.deletedAt).map((i) => [i.id, i]));
     let changed = 0;
     for (const id of [...this.revs.keys()]) {
       if (!live.has(id)) {
@@ -109,6 +122,7 @@ export class SearchIndex {
       checklistTotal: item.stats.checklistTotal,
       checklistDone: item.stats.checklistDone,
       updatedAt: item.updatedAt,
+      archived: item.archived,
     });
     this.revs.set(item.id, item.rev);
     // Snippets show the text after the title, since the title is displayed anyway.
@@ -122,7 +136,9 @@ export class SearchIndex {
     const groupIds = p.groups.length
       ? new Set(this.groups.filter((g) => p.groups.some((name) => g.name.toLowerCase().startsWith(name))).map((g) => g.id))
       : null;
+    const isArchived = (r: Record<string, unknown>) => r.archived === true || this.archivedGroups.has(r.groupId as string);
     const filter = (r: Record<string, unknown>) =>
+      (!p.archived || isArchived(r)) &&
       (!p.kinds.length || p.kinds.includes(r.kind as ItemKind)) &&
       (!p.colours.length || p.colours.includes(r.colour as never)) &&
       (!groupIds || groupIds.has(r.groupId as string)) &&
@@ -132,10 +148,11 @@ export class SearchIndex {
       (!p.done || ((r.checklistTotal as number) > 0 && r.checklistTotal === r.checklistDone));
 
     // Filters (including tags) match exactly; the text part uses fuzzy, prefix search.
+    // Archived items count for less, so live ones come first unless the match is much better.
     const results = p.text
-      ? this.mini.search(p.text, { filter })
-      : this.mini.search(MiniSearch.wildcard, { filter }).sort((a, b) =>
-          String(b.updatedAt).localeCompare(String(a.updatedAt)),
+      ? this.mini.search(p.text, { filter, boostDocument: (_id, _term, r) => (r && isArchived(r) ? ARCHIVED_BOOST : 1) })
+      : this.mini.search(MiniSearch.wildcard, { filter }).sort(
+          (a, b) => Number(isArchived(a)) - Number(isArchived(b)) || String(b.updatedAt).localeCompare(String(a.updatedAt)),
         );
     return results.slice(0, limit).map((r) => ({
       id: r.id,
@@ -143,6 +160,7 @@ export class SearchIndex {
       kind: r.kind as ItemKind,
       groupId: (r.groupId as string | null) ?? null,
       colour: (r.colour as string | null) ?? null,
+      archived: isArchived(r),
       snippet: snippetFor(this.texts.get(r.id) ?? '', r.terms),
       terms: r.terms,
       score: r.score,

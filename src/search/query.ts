@@ -11,12 +11,13 @@ export interface ParsedQuery {
   pinned: boolean;
   open: boolean; // has unticked checklist items
   done: boolean; // checklist fully ticked
+  archived: boolean; // only archived items (themselves or their group)
 }
 
 const KINDS: Record<string, ItemKind> = { note: 'note', notes: 'note', sticky: 'sticky', stickies: 'sticky', ink: 'ink', board: 'board' };
 
 export function parseQuery(q: string): ParsedQuery {
-  const out: ParsedQuery = { text: '', tags: [], kinds: [], colours: [], groups: [], pinned: false, open: false, done: false };
+  const out: ParsedQuery = { text: '', tags: [], kinds: [], colours: [], groups: [], pinned: false, open: false, done: false, archived: false };
   const words: string[] = [];
   // Tokens: key:"quoted value", key:value, #tag, or plain words.
   for (const m of q.matchAll(/(\w+):"([^"]*)"|(\w+):(\S+)|#([\p{L}\p{N}_/-]+)|(\S+)/gu)) {
@@ -31,6 +32,7 @@ export function parseQuery(q: string): ParsedQuery {
     else if (key === 'is' && val === 'pinned') out.pinned = true;
     else if (key === 'is' && val === 'open') out.open = true;
     else if (key === 'is' && val === 'done') out.done = true;
+    else if (key === 'is' && val === 'archived') out.archived = true;
     else words.push(m[0]);
     void word;
   }
@@ -39,4 +41,4 @@ export function parseQuery(q: string): ParsedQuery {
 }
 
 export const hasFilters = (p: ParsedQuery) =>
-  p.tags.length + p.kinds.length + p.colours.length + p.groups.length > 0 || p.pinned || p.open || p.done;
+  p.tags.length + p.kinds.length + p.colours.length + p.groups.length > 0 || p.pinned || p.open || p.done || p.archived;

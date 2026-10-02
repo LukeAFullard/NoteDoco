@@ -25,6 +25,19 @@ test.describe('search', () => {
     await expect(results).toContainText('Buy milk');
     await expect(results).not.toContainText('Launch plan');
 
+    // Archived items are still found, marked as archived; is:archived shows only those.
+    await page.goto('/#/inbox');
+    const row = page.locator('[data-item-id]', { hasText: 'Buy milk' });
+    await row.hover();
+    await row.getByRole('button', { name: 'Item actions' }).click();
+    await page.getByRole('menuitem', { name: 'Archive' }).click();
+    await expect(row).toHaveCount(0);
+    await page.goto('/#/search?q=milk');
+    await expect(results.getByRole('link', { name: /Buy milk/ })).toContainText('Archived');
+    await page.getByRole('searchbox', { name: 'Search notes and stickies' }).fill('is:archived');
+    await expect(results).toContainText('Buy milk');
+    await expect(results).not.toContainText('Launch plan');
+
     await page.keyboard.press('Control+k');
     await page.getByPlaceholder('Search notes, or type a command…').fill('friday');
     await expect(page.getByRole('option', { name: /Launch plan/ })).toBeVisible();

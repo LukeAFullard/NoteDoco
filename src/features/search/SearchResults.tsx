@@ -25,6 +25,11 @@ export function Highlight({ text, terms }: { text: string; terms: string[] }) {
   );
 }
 
+/** Marks a result that's archived (itself or its group); words, not just a colour. */
+export function ArchivedBadge() {
+  return <span className="shrink-0 rounded bg-surface-2 px-1.5 py-0.5 text-xs font-normal text-muted">Archived</span>;
+}
+
 export function SearchResults({ hits, onOpen }: { hits: SearchHit[]; onOpen?: () => void }) {
   const groups = new Map((useGroups() ?? []).map((g) => [g.id, g]));
   return (
@@ -55,6 +60,7 @@ export function SearchResults({ hits, onOpen }: { hits: SearchHit[]; onOpen?: ()
                   <span className="truncate font-medium">
                     <Highlight text={itemTitle(h.title, h.kind)} terms={h.terms} />
                   </span>
+                  {h.archived && <ArchivedBadge />}
                   <span className="shrink-0 text-xs text-muted">{g ? g.name : 'Inbox'}</span>
                 </span>
                 {h.snippet && (

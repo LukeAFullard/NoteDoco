@@ -7,7 +7,7 @@ import { readPref, writePref } from '@/lib/localPref';
 import { useSearch } from '@/search/client';
 import { SearchResults } from './SearchResults';
 
-const FILTER_HINTS = ['#tag', 'kind:sticky', 'colour:coral', 'in:work', 'is:pinned', 'is:open'];
+const FILTER_HINTS = ['#tag', 'kind:sticky', 'colour:coral', 'in:work', 'is:pinned', 'is:open', 'is:archived'];
 
 /** Full search (FIND-1, FIND-2): typo-tolerant text plus filters, with recent searches. */
 export function SearchPage() {
@@ -75,7 +75,7 @@ export function SearchPage() {
           </ul>
         </div>
       ) : (
-        <EmptyState icon={<SearchIcon size={32} />} title="Search everything" body="Titles, text, stickies and tags. Small typos are forgiven. Add filters like #tag or kind:sticky to narrow things down." />
+        <EmptyState icon={<SearchIcon size={32} />} title="Search everything" body="Titles, text, stickies and tags, archived ones included. Small typos are forgiven. Add filters like #tag or kind:sticky to narrow things down." />
       )}
     </Pane>
   );
