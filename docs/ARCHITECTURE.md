@@ -351,6 +351,8 @@ How strokes are drawn:
 - **Index:** MiniSearch in a Web Worker. Fields: title (boost 3), body text (markdown stripped), sticky text, tags (boost 2), attachment names. Later, recognised handwriting and OCR text.
 - **Updates:** repositories post changes to the worker after each write. The index snapshot is persisted so startup doesn't re-index, and it's rebuilt when the schema version changes.
 - **Query syntax:** free text plus filters: `tag:`, `in:<group>`, `kind:`, `colour:`, `due:<date`, `is:open`, `has:ink`. The filter chips in the UI write the same syntax, so power users can type it.
+- **Archived items** are searched too (not trashed ones). An item counts as archived when it is, or when its group or a parent group is. Their text matches count for less (`ARCHIVED_BOOST`), so live items come first, and results say "Archived". `is:archived` shows only those.
+- **Freshness:** the worker re-indexes 150 ms after a change, but a search that arrives sooner indexes first, so it never shows the state from before an edit.
 
 ## 12. Reminders and notifications (honest limits)
 

@@ -1,7 +1,7 @@
 import { db } from '@/data/db';
 import { freshDb } from '@/test/db';
 import { createItem, setBodyText, setManualTags, trashItems, updateItem } from '@/data/repos/items';
-import { createGroup } from '@/data/repos/groups';
+import { createGroup, updateGroup } from '@/data/repos/groups';
 import { SearchIndex } from './SearchIndex';
 
 beforeEach(freshDb);
@@ -45,4 +45,33 @@ it('syncs incrementally: edits, trash and new items', async () => {
   await trashItems([a]);
   await index.sync();
   expect(index.search('bravo')).toHaveLength(0);
+});
+
+it('finds archived items (and items in archived groups) ranked lower, marked, and with is:archived', async () => {
+  const live = await createItem({ kind: 'note', text: 'Budget notes' });
+  const old = await createItem({ kind: 'note', text: 'Budget' });
+  await updateItem(old, { archived: true });
+  const g = await createGroup({ name: 'Old projects' });
+  const sub = await createGroup({ name: 'Website', parentId: g });
+  const inGroup = await createItem({ kind: 'sticky', groupId: sub, text: 'Budget for the website' });
+  const index = new SearchIndex(db);
+  await index.sync();
+  const found = (q: string) => index.search(q).map((h) => [h.id, h.archived]);
+  // The archived note's title is the better match, but live items come first.
+  expect(found('budget')).toEqual([
+    [live, false],
+    [inGroup, false],
+    [old, true],
+  ]);
+
+  // Archiving a group marks what's inside it, its subgroups included, without re-indexing items.
+  await updateGroup(g, { archived: true });
+  expect(await index.sync()).toBe(0);
+  expect(found('budget')[0]).toEqual([live, false]);
+  expect(found('is:archived').sort()).toEqual([[inGroup, true], [old, true]].sort());
+  expect(found('budget is:archived kind:sticky')).toEqual([[inGroup, true]]);
+
+  await updateItem(old, { archived: false });
+  await index.sync();
+  expect(found('is:archived')).toEqual([[inGroup, true]]);
 });

@@ -10,7 +10,9 @@ it('parses free text and filters', () => {
     pinned: false,
     open: true,
     done: false,
+    archived: false,
   });
+  expect(parseQuery('is:archived').archived).toBe(true);
 });
 
 it('leaves unknown filters as text', () => {
